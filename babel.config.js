@@ -2,19 +2,23 @@ module.exports = function (api) {
   api.cache(true);
   return {
     presets: [
-      // jsxImportSource tells Babel to use NativeWind's JSX runtime,
-      // which handles className → StyleSheet on native and CSS on web.
-      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
-    ],
-    plugins: [
-      // nativewind/babel transforms the `tw` / className props for native.
-      'nativewind/babel',
-      // react-native-reanimated/plugin is intentionally OMITTED.
-      // Reanimated v4 redesigned its plugin system; the old plugin
-      // returns an object with a `plugins` key which Babel rejects as
-      // ".plugins is not a valid Plugin property".
-      // We don't use Reanimated's hooks directly (we use RN's Animated),
-      // so this plugin is not needed.
+      // babel-preset-expo handles JSX, TypeScript and platform-specific
+      // transforms. No extra plugins needed:
+      //
+      // • nativewind/babel is intentionally removed — in NativeWind v4.x
+      //   the package exports { plugins:[...] } (preset format) rather than
+      //   a plugin factory, which causes Babel to throw
+      //   ".plugins is not a valid Plugin property". Additionally, that
+      //   plugin is only needed when using className="..." JSX props; our
+      //   codebase uses StyleSheet.create() exclusively, so it is a no-op.
+      //
+      // • react-native-reanimated/plugin is intentionally removed — in
+      //   Reanimated v4 the old plugin also returns an invalid structure.
+      //   We don't use any Reanimated hooks directly.
+      //
+      // CSS processing (Tailwind) is handled by metro.config.js via
+      // withNativeWind — that is independent of Babel.
+      'babel-preset-expo',
     ],
   };
 };
