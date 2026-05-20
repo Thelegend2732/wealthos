@@ -1,4 +1,3 @@
-import '../global.css';
 import React from 'react';
 import { Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
@@ -15,15 +14,12 @@ const queryClient = new QueryClient({
   },
 });
 
-// GestureHandlerRootView is only needed on native (iOS / Android).
-// On web, react-native-gesture-handler uses DOM events directly and
-// the wrapper component is a no-op — but importing the native module
-// pulls in react-native-reanimated → react-native-worklets-core which
-// has no web implementation and crashes the Metro web bundle.
+// On web: plain View — gesture-handler's GestureHandlerRootView is a
+// no-op in the browser and importing it pulls react-native-reanimated
+// → react-native-worklets-core which has no web build.
+// On native: lazy-require so the web bundle never touches it.
 function RootWrapper({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'web') {
-    // Lazy-require so the web bundle never touches gesture-handler's
-    // native reanimated bindings during the import phase.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { GestureHandlerRootView } = require('react-native-gesture-handler');
     return (
@@ -40,7 +36,7 @@ export default function RootLayout() {
     <RootWrapper>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="light" />
+          <StatusBar style="light" backgroundColor="#0A0A0F" />
           <Stack screenOptions={{ headerShown: false }} />
         </QueryClientProvider>
       </SafeAreaProvider>

@@ -1,12 +1,11 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
 
-// Stub out modules that have no web implementation.
-// react-native-worklets-core / react-native-worklets are used by
-// react-native-reanimated v4 internally. They rely on JSI / native threads
-// that don't exist in a browser — Metro would fail trying to bundle them.
+// Stub modules that have no web implementation so Metro doesn't crash
+// when bundling for web. react-native-worklets-core is used internally
+// by react-native-reanimated v4 on native only (JSI threads); the web
+// build of reanimated uses CSS/JS animations without worklets.
 const WEB_STUB_MODULES = new Set([
   'react-native-worklets-core',
   'react-native-worklets',
@@ -26,4 +25,4 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = config;
