@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Asset, AssetCategory, PriceData } from '../types';
+import { KNOWN_MOCK_SYMBOLS } from '../services/alphaVantage';
 
 interface PortfolioStore {
   assets: Asset[];
@@ -43,9 +44,15 @@ export const usePortfolioStore = create<PortfolioStore>()(
       updatePrices: (prices) =>
         set((s) => ({
           prices: { ...s.prices, ...prices },
-          assets: s.assets.map((a) =>
-            prices[a.symbol] ? { ...a, currentPrice: prices[a.symbol].price } : a
-          ),
+          assets: s.assets.map((a) => {
+            const p = prices[a.symbol];
+            if (!p || p.price <= 0) return a;
+            // If the price is from the mock/delayed fallback and we don't have
+            // a curated mock for this symbol, keep the user-entered avgPrice
+            // rather than overwriting with the generic 0 sentinel.
+            if (p.isDelayed && !KNOWN_MOCK_SYMBOLS.has(a.symbol)) return a;
+            return { ...a, currentPrice: p.price };
+          }),
           lastUpdated: Date.now(),
         })),
 

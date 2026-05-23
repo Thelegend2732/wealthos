@@ -21,7 +21,7 @@ export function NewsPage() {
   };
 
   return (
-    <div className="space-y-6" style={{ padding: '0 20px' }}>
+    <div className="space-y-6" style={{ padding: '0 20px 0' }}>
       <PageHeader
         title="Markets"
         subtitle="Curated financial news"

@@ -59,17 +59,45 @@ async function fetchAV(symbol: string): Promise<PriceData> {
   };
 }
 
-// Mock fallback so the UI always has SOMETHING to show even without API key
+// Mock fallback so the UI always has SOMETHING to show even without API key.
+// Prices are approximate USD values as of mid-2025.
 const MOCK_PRICES: Record<string, { price: number; changePercent: number }> = {
-  VOO: { price: 542.18, changePercent: 0.84 },
-  QQQ: { price: 498.65, changePercent: 1.23 },
+  // Index ETFs
+  VOO:  { price: 542.18, changePercent:  0.84 },
+  VTI:  { price: 278.45, changePercent:  0.62 },
+  VT:   { price: 118.32, changePercent:  0.41 },
+  SPY:  { price: 540.10, changePercent:  0.77 },
+  QQQ:  { price: 498.65, changePercent:  1.23 },
+  IVV:  { price: 541.80, changePercent:  0.80 },
+  // Sector / thematic ETFs
   SOXX: { price: 248.91, changePercent: -0.45 },
-  NVDA: { price: 942.50, changePercent: 2.18 },
+  SMH:  { price: 278.60, changePercent:  1.05 },
+  XLK:  { price: 236.40, changePercent:  0.92 },
+  ARKK: { price:  56.30, changePercent:  1.80 },
+  // Large-cap stocks
+  MSFT: { price: 430.50, changePercent:  0.75 },
+  AAPL: { price: 215.40, changePercent:  0.52 },
+  NVDA: { price: 942.50, changePercent:  2.18 },
+  GOOGL:{ price: 175.20, changePercent:  0.88 },
+  GOOG: { price: 176.10, changePercent:  0.87 },
+  AMZN: { price: 195.30, changePercent:  1.12 },
+  META: { price: 530.80, changePercent:  1.35 },
+  TSLA: { price: 248.60, changePercent:  2.10 },
   ASML: { price: 894.32, changePercent: -1.12 },
+  AMD:  { price: 168.90, changePercent:  1.65 },
+  INTC: { price:  31.20, changePercent: -0.40 },
+  TSM:  { price: 185.40, changePercent:  0.95 },
+  // Financial / other
+  BRK:  { price: 453.20, changePercent:  0.30 },
+  JPM:  { price: 234.10, changePercent:  0.45 },
+  V:    { price: 310.50, changePercent:  0.38 },
 };
 
+/** Symbols for which we have a curated mock price (not the generic 100 fallback). */
+export const KNOWN_MOCK_SYMBOLS = new Set(Object.keys(MOCK_PRICES));
+
 function mockPrice(symbol: string): PriceData {
-  const m = MOCK_PRICES[symbol] ?? { price: 100, changePercent: 0 };
+  const m = MOCK_PRICES[symbol] ?? { price: 0, changePercent: 0 };
   const change = (m.price * m.changePercent) / 100;
   return {
     symbol,
