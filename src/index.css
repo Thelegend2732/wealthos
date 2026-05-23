@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse at top, rgba(108, 99, 255, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(0, 212, 170, 0.04) 0%, transparent 50%),
+      #0A0A0F;
+    min-height: 100vh;
+  }
+
+  /* Number alignment in tables/lists */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A38;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3A48;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(108, 99, 255, 0.3);
+    color: #fff;
+  }
+
+  /* Better focus rings */
+  :focus-visible {
+    outline: 2px solid #6C63FF;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Remove number input spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  /* Range slider */
+  input[type='range'] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    height: 24px;
+  }
+  input[type='range']::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #6C63FF var(--range-pct, 50%), #1E1E2E var(--range-pct, 50%));
+    height: 6px;
+    border-radius: 3px;
+  }
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #fff;
+    border: 3px solid #6C63FF;
+    height: 18px;
+    width: 18px;
+    border-radius: 50%;
+    margin-top: -6px;
+    box-shadow: 0 2px 8px rgba(108, 99, 255, 0.4);
+    transition: transform 0.15s;
+  }
+  input[type='range']::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+  input[type='range']::-moz-range-track {
+    background: #1E1E2E;
+    height: 6px;
+    border-radius: 3px;
+  }
+  input[type='range']::-moz-range-progress {
+    background: #6C63FF;
+    height: 6px;
+    border-radius: 3px;
+  }
+  input[type='range']::-moz-range-thumb {
+    background: #fff;
+    border: 3px solid #6C63FF;
+    height: 18px;
+    width: 18px;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(108, 99, 255, 0.4);
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-border rounded-2xl;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  }
+
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    @apply border-border-strong;
+    transform: translateY(-1px);
+  }
+
+  .glass {
+    background: rgba(19, 19, 26, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #1A1A24 0%,
+      #2A2A38 50%,
+      #1A1A24 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
