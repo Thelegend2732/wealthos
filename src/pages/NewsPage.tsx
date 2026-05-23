@@ -1,16 +1,27 @@
 import { useState } from 'react';
+import { X, ExternalLink } from 'lucide-react';
 import { useNews } from '../hooks/useNews';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CategoryTabs } from '../components/news/CategoryTabs';
 import { NewsCard } from '../components/news/NewsCard';
+import { relativeTime } from '../constants/theme';
 import type { NewsItem } from '../types';
 
 export function NewsPage() {
   const [active, setActive] = useState<NewsItem['category']>('finance');
+  const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
   const { news, isLoading, refresh, markRead } = useNews(active);
 
+  const handleSelect = (item: NewsItem) => {
+    setSelectedArticle(item);
+  };
+
+  const handleClose = () => {
+    setSelectedArticle(null);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ padding: '0 20px' }}>
       <PageHeader
         title="Markets"
         subtitle="Curated financial news"
@@ -40,7 +51,13 @@ export function NewsPage() {
       ) : (
         <div className="space-y-3">
           {news.map((item, i) => (
-            <NewsCard key={item.id} item={item} onRead={markRead} index={i} />
+            <NewsCard
+              key={item.id}
+              item={item}
+              onRead={markRead}
+              onSelect={handleSelect}
+              index={i}
+            />
           ))}
           {news.length === 0 && (
             <div className="card p-16 text-center">
@@ -48,6 +65,125 @@ export function NewsPage() {
               <p className="text-sm text-text-muted mt-1">Try refreshing or check your NewsAPI key</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Article bottom sheet modal */}
+      {selectedArticle && (
+        <div
+          onClick={handleClose}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'flex-end',
+            animation: 'slideIn 0.2s both',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 430,
+              margin: '0 auto',
+              maxHeight: '88vh',
+              background: 'linear-gradient(180deg, #111827 0%, #0a0f1e 100%)',
+              border: '1px solid rgba(255,255,255,0.10)',
+              borderRadius: '24px 24px 0 0',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              animation: 'slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}
+          >
+            {/* Handle bar */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.15)' }} />
+            </div>
+
+            {/* Close button */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+              <button
+                onClick={handleClose}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={15} color="#94a3b8" />
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px 32px' }}>
+              {/* Hero image */}
+              {selectedArticle.imageUrl && (
+                <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 180 }}>
+                  <img
+                    src={selectedArticle.imageUrl}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+
+              {/* Source + date */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  color: '#6366f1', background: 'rgba(99,102,241,0.12)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  borderRadius: 6, padding: '2px 8px',
+                }}>
+                  {selectedArticle.source}
+                </span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>
+                  {relativeTime(selectedArticle.publishedAt)}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h2 style={{
+                fontSize: 20, fontWeight: 700, color: '#f1f5f9',
+                lineHeight: 1.35, letterSpacing: '-0.02em', marginBottom: 16,
+              }}>
+                {selectedArticle.title}
+              </h2>
+
+              {/* Description */}
+              <p style={{
+                fontSize: 15, color: '#94a3b8', lineHeight: 1.7, marginBottom: 28,
+              }}>
+                {selectedArticle.description}
+              </p>
+
+              {/* CTA */}
+              {selectedArticle.url && selectedArticle.url !== '#' && (
+                <button
+                  onClick={() => window.open(selectedArticle.url, '_blank', 'noopener,noreferrer')}
+                  style={{
+                    width: '100%', padding: '14px 20px',
+                    background: 'rgba(99,102,241,0.15)',
+                    border: '1px solid rgba(99,102,241,0.35)',
+                    borderRadius: 14, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    fontSize: 14, fontWeight: 600, color: '#a78bfa',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.25)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.15)'}
+                >
+                  <ExternalLink size={15} />
+                  Abrir artículo completo
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

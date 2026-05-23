@@ -5,15 +5,18 @@ import type { NewsItem } from '../../types';
 interface Props {
   item: NewsItem;
   onRead: (id: string) => void;
+  onSelect?: (item: NewsItem) => void;
   index: number;
 }
 
-export function NewsCard({ item, onRead, index }: Props) {
+export function NewsCard({ item, onRead, onSelect, index }: Props) {
   const [imageError, setImageError] = useState(false);
 
   const handleClick = () => {
     onRead(item.id);
-    if (item.url && item.url !== '#') {
+    if (onSelect) {
+      onSelect(item);
+    } else if (item.url && item.url !== '#') {
       window.open(item.url, '_blank', 'noopener,noreferrer');
     }
   };
