@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Bell, ChevronRight } from 'lucide-react';
 import { usePortfolioStore } from '../stores/portfolioStore';
 import { usePrices } from '../hooks/usePrices';
+import { PortfolioChart } from '../components/portfolio/PortfolioChart';
 import type { Asset } from '../types';
 
 const PALETTE = ['#10b981', '#6366f1', '#22d3ee', '#f59e0b', '#a78bfa', '#34d399', '#f87171', '#60a5fa'];
@@ -204,6 +205,13 @@ export function PortfolioPage() {
           </span>
         </div>
       </div>
+
+      {/* Portfolio chart — recharts area, ready for live tick stream */}
+      <PortfolioChart
+        currentValue={totalValue}
+        costBasis={totalCost}
+        isLoading={isLoading}
+      />
 
       {/* Donut + legend */}
       <div style={{

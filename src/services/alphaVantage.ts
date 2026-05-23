@@ -96,6 +96,101 @@ const MOCK_PRICES: Record<string, { price: number; changePercent: number }> = {
 /** Symbols for which we have a curated mock price (not the generic 100 fallback). */
 export const KNOWN_MOCK_SYMBOLS = new Set(Object.keys(MOCK_PRICES));
 
+/**
+ * Curated catalog of well-known instruments. Used by the AssetForm search.
+ * Each entry is a real, tradable ticker — saving is blocked for anything not
+ * found via this catalog (or via Alpha Vantage SYMBOL_SEARCH when available).
+ */
+export interface SymbolMatch {
+  symbol: string;
+  name: string;
+  category: 'index-fund' | 'etf' | 'stock';
+  currency: 'USD' | 'EUR';
+  exchange?: string;
+}
+
+const CATALOG: SymbolMatch[] = [
+  // Index ETFs
+  { symbol: 'VOO',  name: 'Vanguard S&P 500 ETF',            category: 'index-fund', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'VTI',  name: 'Vanguard Total Stock Market ETF', category: 'index-fund', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'VT',   name: 'Vanguard Total World Stock ETF',  category: 'index-fund', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'SPY',  name: 'SPDR S&P 500 ETF Trust',          category: 'index-fund', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'QQQ',  name: 'Invesco QQQ Trust (Nasdaq 100)',  category: 'index-fund', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'IVV',  name: 'iShares Core S&P 500 ETF',        category: 'index-fund', currency: 'USD', exchange: 'NYSE Arca' },
+  // Thematic / sector ETFs
+  { symbol: 'SOXX', name: 'iShares Semiconductor ETF',                 category: 'etf', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'SMH',  name: 'VanEck Semiconductor ETF',                  category: 'etf', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'XLK',  name: 'Technology Select Sector SPDR Fund',        category: 'etf', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'ARKK', name: 'ARK Innovation ETF',                        category: 'etf', currency: 'USD', exchange: 'NYSE Arca' },
+  { symbol: 'WSMG', name: 'iShares MSCI Global Semiconductors UCITS',  category: 'etf', currency: 'USD', exchange: 'LSE' },
+  // Mega-cap stocks
+  { symbol: 'AAPL', name: 'Apple Inc.',                       category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation',            category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation',               category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'GOOGL',name: 'Alphabet Inc. Class A',            category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'GOOG', name: 'Alphabet Inc. Class C',            category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.',                  category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'META', name: 'Meta Platforms Inc.',              category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'TSLA', name: 'Tesla Inc.',                       category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'ASML', name: 'ASML Holding N.V.',                category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'AMD',  name: 'Advanced Micro Devices Inc.',      category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'INTC', name: 'Intel Corporation',                category: 'stock', currency: 'USD', exchange: 'NASDAQ' },
+  { symbol: 'TSM',  name: 'Taiwan Semiconductor Manufacturing', category: 'stock', currency: 'USD', exchange: 'NYSE' },
+  { symbol: 'JPM',  name: 'JPMorgan Chase & Co.',             category: 'stock', currency: 'USD', exchange: 'NYSE' },
+  { symbol: 'V',    name: 'Visa Inc.',                        category: 'stock', currency: 'USD', exchange: 'NYSE' },
+];
+
+const CATALOG_MAP = new Map(CATALOG.map((c) => [c.symbol, c]));
+
+/** Get an exact catalog match for a ticker symbol, or null. */
+export function findSymbol(symbol: string): SymbolMatch | null {
+  return CATALOG_MAP.get(symbol.toUpperCase()) ?? null;
+}
+
+/**
+ * Fuzzy-search the catalog by ticker or company name. Falls back to Alpha
+ * Vantage SYMBOL_SEARCH when the local catalog has no good match (the API
+ * call is rate-limited, so we only fire it for queries ≥ 2 chars and when
+ * the local result set is empty).
+ */
+export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const local = CATALOG.filter(
+    (c) =>
+      c.symbol.toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q)
+  ).slice(0, 8);
+
+  if (local.length > 0) return local;
+
+  // Remote fallback — best-effort, swallow rate-limit errors silently
+  try {
+    const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(q)}&apikey=${ALPHA_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = await res.json();
+    const matches = (json.bestMatches ?? []) as Array<Record<string, string>>;
+    return matches.slice(0, 8).map((m) => {
+      const type = (m['3. type'] ?? '').toLowerCase();
+      return {
+        symbol: m['1. symbol'] ?? '',
+        name: m['2. name'] ?? '',
+        category: type.includes('etf')
+          ? 'etf'
+          : type.includes('fund')
+            ? 'index-fund'
+            : 'stock',
+        currency: (m['8. currency'] === 'EUR' ? 'EUR' : 'USD') as 'USD' | 'EUR',
+        exchange: m['4. region'],
+      } satisfies SymbolMatch;
+    }).filter((m) => m.symbol);
+  } catch {
+    return [];
+  }
+}
+
 function mockPrice(symbol: string): PriceData {
   const m = MOCK_PRICES[symbol] ?? { price: 0, changePercent: 0 };
   const change = (m.price * m.changePercent) / 100;

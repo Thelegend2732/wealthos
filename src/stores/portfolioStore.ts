@@ -10,7 +10,7 @@ interface PortfolioStore {
   selectedCategory: AssetCategory | null;
   setSelectedCategory: (c: AssetCategory | null) => void;
   updatePrices: (prices: Record<string, PriceData>) => void;
-  addAsset: (a: Omit<Asset, 'id' | 'currentPrice'>) => void;
+  addAsset: (a: Omit<Asset, 'id' | 'currentPrice'> & { currentPrice?: number }) => void;
   updateAsset: (id: string, patch: Partial<Omit<Asset, 'id' | 'currentPrice'>>) => void;
   removeAsset: (id: string) => void;
   resetToDefaults: () => void;
@@ -57,12 +57,22 @@ export const usePortfolioStore = create<PortfolioStore>()(
         })),
 
       addAsset: (a) =>
-        set((s) => ({
-          assets: [
-            ...s.assets,
-            { ...a, id: crypto.randomUUID(), currentPrice: a.avgPrice },
-          ],
-        })),
+        set((s) => {
+          const { currentPrice, ...rest } = a;
+          // If the form fetched a live price for the ticker, use it so PnL is
+          // non-zero from the first render. Otherwise fall back to avgPrice
+          // (cost basis), which yields 0% gain until the next price refresh.
+          const initialPrice =
+            typeof currentPrice === 'number' && currentPrice > 0
+              ? currentPrice
+              : rest.avgPrice;
+          return {
+            assets: [
+              ...s.assets,
+              { ...rest, id: crypto.randomUUID(), currentPrice: initialPrice },
+            ],
+          };
+        }),
 
       updateAsset: (id, patch) =>
         set((s) => ({

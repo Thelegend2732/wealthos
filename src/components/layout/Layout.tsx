@@ -1,5 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Home, BarChart2, User } from 'lucide-react';
+import { useIsModalOpen } from '../../stores/uiStore';
 
 const TABS = [
   { icon: Home, label: 'Inicio', route: '/' },
@@ -10,6 +11,7 @@ const TABS = [
 export function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const isModalOpen = useIsModalOpen();
 
   return (
     <div style={{
@@ -61,7 +63,10 @@ export function Layout() {
         </div>
       </main>
 
-      {/* Premium floating bottom nav — sits at the bottom of the flex column */}
+      {/* Premium floating bottom nav — sits at the bottom of the flex column.
+          Unmounted (not just hidden) whenever any modal is open, so we never
+          have to fight the modal's z-index. */}
+      {!isModalOpen && (
       <div style={{ position: 'relative', zIndex: 10, padding: '0 0 16px', flexShrink: 0 }}>
       <nav style={{
         margin: '8px auto 0',
@@ -102,6 +107,7 @@ export function Layout() {
         })}
       </nav>
       </div>
+      )}
     </div>
   );
 }

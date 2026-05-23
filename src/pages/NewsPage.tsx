@@ -1,16 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import { useNews } from '../hooks/useNews';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CategoryTabs } from '../components/news/CategoryTabs';
 import { NewsCard } from '../components/news/NewsCard';
 import { relativeTime } from '../constants/theme';
+import { useUIStore } from '../stores/uiStore';
 import type { NewsItem } from '../types';
 
 export function NewsPage() {
   const [active, setActive] = useState<NewsItem['category']>('finance');
   const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
   const { news, isLoading, refresh, markRead } = useNews(active);
+
+  // Hide bottom nav while the article reader is open.
+  const openModal = useUIStore((s) => s.openModal);
+  const closeModal = useUIStore((s) => s.closeModal);
+  useEffect(() => {
+    if (!selectedArticle) return;
+    openModal();
+    return () => closeModal();
+  }, [selectedArticle, openModal, closeModal]);
 
   const handleSelect = (item: NewsItem) => {
     setSelectedArticle(item);
@@ -119,11 +129,14 @@ export function NewsPage() {
             </div>
 
             {/* Scrollable content */}
-            <div style={{
-              overflowY: 'auto', flex: 1,
-              padding: '12px 20px 96px',
-              WebkitOverflowScrolling: 'touch',
-            }}>
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain"
+              style={{
+                padding: '12px 20px 128px',
+                WebkitOverflowScrolling: 'touch',
+                minHeight: 0,
+              }}
+            >
               {/* Hero image */}
               {selectedArticle.imageUrl && (
                 <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 180 }}>
@@ -161,7 +174,8 @@ export function NewsPage() {
 
               {/* Description */}
               <p style={{
-                fontSize: 15, color: '#94a3b8', lineHeight: 1.7, marginBottom: 28,
+                fontSize: 15, color: '#cbd5e1', lineHeight: 1.75, marginBottom: 28,
+                whiteSpace: 'pre-wrap',
               }}>
                 {selectedArticle.description}
               </p>
@@ -177,7 +191,7 @@ export function NewsPage() {
                     borderRadius: 14, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     fontSize: 14, fontWeight: 600, color: '#a78bfa',
-                    transition: 'background 0.2s',
+                    transition: 'background 0.2s', marginBottom: 24,
                   }}
                   onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.25)'}
                   onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.15)'}
@@ -185,6 +199,35 @@ export function NewsPage() {
                   <ExternalLink size={15} />
                   Abrir artículo completo
                 </button>
+              )}
+
+              {/* Source anchor — always present at the end of the article */}
+              {selectedArticle.url && selectedArticle.url !== '#' && (
+                <div
+                  style={{
+                    paddingTop: 18,
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: 12, color: '#64748b',
+                  }}
+                >
+                  Fuente:{' '}
+                  <a
+                    href={selectedArticle.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#a78bfa', textDecoration: 'underline',
+                      textDecorationColor: 'rgba(167,139,250,0.4)',
+                      textUnderlineOffset: 3,
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {selectedArticle.source} — {(() => {
+                      try { return new URL(selectedArticle.url).hostname.replace(/^www\./, ''); }
+                      catch { return 'enlace original'; }
+                    })()}
+                  </a>
+                </div>
               )}
             </div>
           </div>
