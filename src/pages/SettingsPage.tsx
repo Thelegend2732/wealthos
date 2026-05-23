@@ -40,10 +40,10 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" style={{ padding: '0 20px' }}>
       <PageHeader
-        title="Settings"
-        subtitle="Manage your portfolio positions"
+        title="Perfil"
+        subtitle="Gestiona tus posiciones"
         right={
           <button
             onClick={openNew}

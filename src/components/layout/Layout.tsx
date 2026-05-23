@@ -3,7 +3,7 @@ import { Home, BarChart2, User } from 'lucide-react';
 
 const TABS = [
   { icon: Home, label: 'Inicio', route: '/' },
-  { icon: BarChart2, label: 'Mercado', route: '/news' },
+  { icon: BarChart2, label: 'Noticias', route: '/news' },
   { icon: User, label: 'Perfil', route: '/settings' },
 ];
 

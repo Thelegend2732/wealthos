@@ -57,31 +57,30 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in"
+      className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-surface border border-border rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg p-8 space-y-6 animate-slide-up"
+        className="bg-surface border border-border rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg flex flex-col animate-slide-up"
+        style={{ maxHeight: '90dvh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
+        {/* Fixed header — never scrolls away */}
+        <div className="flex items-center justify-between px-8 pt-8 pb-4 shrink-0">
           <h3 className="text-xl font-semibold text-text-primary tracking-tight-2">
-            {asset ? 'Edit Position' : 'New Position'}
+            {asset ? 'Editar posición' : 'Nueva posición'}
           </h3>
-          <button
-            onClick={onClose}
-            className="icon-btn"
-            aria-label="Close"
-          >
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="space-y-5">
+        {/* Scrollable form body */}
+        <div className="overflow-y-auto flex-1 px-8 pb-10 space-y-5" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="grid grid-cols-2 gap-5">
-            <FormField label="Symbol" hint="Ticker (e.g. NVDA)">
+            <FormField label="Símbolo" hint="Ticker (ej. NVDA)">
               <input
                 type="text"
                 value={symbol}
@@ -92,7 +91,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                 maxLength={8}
               />
             </FormField>
-            <FormField label="Currency">
+            <FormField label="Divisa">
               <div className="flex gap-1 bg-bg rounded-lg p-1 border border-border">
                 {CURRENCIES.map((c) => (
                   <button
@@ -111,7 +110,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
             </FormField>
           </div>
 
-          <FormField label="Name" hint="Full asset name">
+          <FormField label="Nombre" hint="Nombre completo del activo">
             <input
               type="text"
               value={name}
@@ -122,7 +121,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
           </FormField>
 
           <div className="grid grid-cols-2 gap-5">
-            <FormField label="Quantity" hint="Shares owned">
+            <FormField label="Cantidad" hint="Acciones en cartera">
               <input
                 type="number"
                 value={quantity}
@@ -133,7 +132,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                 min="0"
               />
             </FormField>
-            <FormField label="Avg Price" hint={`Per share (${currency})`}>
+            <FormField label="Precio medio" hint={`Por acción (${currency})`}>
               <input
                 type="number"
                 value={avgPrice}
@@ -146,7 +145,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
             </FormField>
           </div>
 
-          <FormField label="Category">
+          <FormField label="Categoría">
             <div className="flex gap-2">
               {CATEGORIES.map((c) => {
                 const isActive = category === c;
@@ -160,31 +159,29 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                         : 'border-border text-text-secondary hover:border-border-strong'
                     }`}
                   >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: CATEGORY_COLORS[c] }}
-                    />
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[c] }} />
                     {CATEGORY_LABELS[c]}
                   </button>
                 );
               })}
             </div>
           </FormField>
-        </div>
 
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={onClose}
-            className="flex-1 h-11 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-border-strong font-medium text-sm transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 h-11 rounded-lg bg-text-primary text-bg font-medium text-sm hover:bg-text-secondary transition-colors"
-          >
-            {asset ? 'Save changes' : 'Add position'}
-          </button>
+          {/* Action buttons — inside scroll area so they're always reachable */}
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 h-11 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-border-strong font-medium text-sm transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex-1 h-11 rounded-lg bg-text-primary text-bg font-medium text-sm hover:bg-text-secondary transition-colors"
+            >
+              {asset ? 'Guardar cambios' : 'Añadir posición'}
+            </button>
+          </div>
         </div>
       </div>
 
