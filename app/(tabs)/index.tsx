@@ -8,7 +8,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import PortfolioSummary from '../../components/portfolio/PortfolioSummary';
 import PortfolioPieChart from '../../components/portfolio/PortfolioPieChart';
@@ -69,7 +68,7 @@ export default function PortfolioScreen() {
             <Text style={styles.updated}>Updated {relativeTime(lastUpdated)}</Text>
           </View>
           <TouchableOpacity onPress={handleRefresh} style={styles.refreshBtn}>
-            <Ionicons name="refresh" size={18} color={COLORS.primary} />
+            <Text style={{ color: COLORS.primary, fontSize: 18 }}>↻</Text>
           </TouchableOpacity>
         </View>
 

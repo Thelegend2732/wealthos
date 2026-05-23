@@ -11,7 +11,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useDCAStore } from '../../stores/dcaStore';
 import ContributionForm from '../../components/dca/ContributionForm';
 import ProjectionChart from '../../components/dca/ProjectionChart';
@@ -143,7 +142,7 @@ export default function DCAScreen() {
               style={styles.addBtn}
               activeOpacity={0.8}
             >
-              <Ionicons name="add" size={18} color={COLORS.textPrimary} />
+              <Text style={{ color: COLORS.textPrimary, fontSize: 18, fontWeight: '700' }}>+</Text>
               <Text style={styles.addBtnText}>Add</Text>
             </TouchableOpacity>
           </View>
@@ -178,7 +177,7 @@ export default function DCAScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Contribution</Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+                <Text style={{ color: COLORS.textSecondary, fontSize: 22 }}>✕</Text>
               </TouchableOpacity>
             </View>
 

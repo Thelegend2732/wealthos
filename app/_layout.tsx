@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,6 +16,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Using <Slot /> instead of <Stack /> deliberately:
+// • <Stack /> pulls in @react-navigation/native-stack which depends on
+//   react-native-reanimated transitively. Without reanimated installed,
+//   the Stack initializer crashes silently → blank page.
+// • <Slot /> is the minimal Expo Router primitive — it just renders the
+//   matched route. No native navigators, no animations, no reanimated.
 export default function RootLayout() {
   return (
     <TopLevelErrorBoundary>
@@ -23,7 +29,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false }} />
+            <Slot />
           </QueryClientProvider>
         </SafeAreaProvider>
       </View>
