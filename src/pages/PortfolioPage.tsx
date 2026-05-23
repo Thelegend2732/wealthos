@@ -1,102 +1,392 @@
-import { usePrices } from '../hooks/usePrices';
-import { usePortfolioStore } from '../stores/portfolioStore';
-import { PageHeader } from '../components/ui/PageHeader';
-import { PortfolioSummary } from '../components/portfolio/PortfolioSummary';
-import { AllocationChart } from '../components/portfolio/AllocationChart';
-import { CategoryBreakdown } from '../components/portfolio/CategoryBreakdown';
-import { AssetCard } from '../components/portfolio/AssetCard';
-import { relativeTime } from '../constants/theme';
+import { useState, useEffect } from "react";
+import { TrendingUp, TrendingDown, Home, BarChart2, PlusCircle, Bell, User, ChevronRight, Zap } from "lucide-react";
 
-export function PortfolioPage() {
-  const { isLoading, refetch, isFetching } = usePrices();
-  const totalValue = usePortfolioStore((s) => s.getTotalValue());
-  const totalInvested = usePortfolioStore((s) => s.getTotalInvested());
-  const pnl = usePortfolioStore((s) => s.getPnL());
-  const todayChange = usePortfolioStore((s) => s.getTodayChange());
-  const breakdown = usePortfolioStore((s) => s.getCategoryBreakdown());
-  const filtered = usePortfolioStore((s) => s.getFilteredAssets());
-  const selectedCategory = usePortfolioStore((s) => s.selectedCategory);
-  const setSelectedCategory = usePortfolioStore((s) => s.setSelectedCategory);
-  const prices = usePortfolioStore((s) => s.prices);
-  const lastUpdated = usePortfolioStore((s) => s.lastUpdated);
-  const totalAssets = usePortfolioStore((s) => s.assets.length);
+const positions = [
+  { id: 1, name: "S&P 500", ticker: "SPY", type: "ETF", value: 42180, cost: 36200, color: "#10b981", icon: "📈", weight: 28 },
+  { id: 2, name: "Nasdaq-100", ticker: "QQQ", type: "ETF", value: 31540, cost: 27100, color: "#6366f1", icon: "💹", weight: 21 },
+  { id: 3, name: "Microsoft", ticker: "MSFT", type: "Acción", value: 28900, cost: 24700, color: "#22d3ee", icon: "🪟", weight: 19 },
+  { id: 4, name: "Semiconductores", ticker: "SOXX", type: "ETF", value: 21600, cost: 19800, color: "#f59e0b", icon: "⚡", weight: 14 },
+  { id: 5, name: "NVIDIA", ticker: "NVDA", type: "Acción", value: 18750, cost: 14200, color: "#a78bfa", icon: "🟢", weight: 12 },
+  { id: 6, name: "Apple", ticker: "AAPL", type: "Acción", value: 8930, cost: 8200, color: "#34d399", icon: "🍎", weight: 6 },
+];
+
+const totalValue = positions.reduce((a, b) => a + b.value, 0);
+const totalCost = positions.reduce((a, b) => a + b.cost, 0);
+const totalGain = totalValue - totalCost;
+const totalPct = ((totalGain / totalCost) * 100).toFixed(2);
+
+function useCountUp(target: number, duration = 1800) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let start: number | null = null;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 4);
+      setVal(Math.floor(ease * target));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target]);
+  return val;
+}
+
+function DonutChart() {
+  const size = 200, cx = 100, cy = 100, r = 72, stroke = 18;
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
+  const slices = positions.map((p) => {
+    const dash = (p.weight / 100) * circ;
+    const gap = circ - dash;
+    const slice = { ...p, dash, gap, offset };
+    offset += dash;
+    return slice;
+  });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="WealthOS"
-        subtitle={lastUpdated ? `Updated ${relativeTime(new Date(lastUpdated))}` : 'Loading prices…'}
-        right={
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="icon-btn disabled:opacity-50"
-            aria-label="Refresh prices"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={isFetching ? 'animate-spin' : ''}
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-          </button>
-        }
-      />
-
-      <PortfolioSummary
-        totalValue={totalValue}
-        totalInvested={totalInvested}
-        pnl={pnl}
-        todayChange={todayChange}
-        isLoading={isLoading}
-      />
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <AllocationChart breakdown={breakdown} totalValue={totalValue} />
-        <CategoryBreakdown
-          breakdown={breakdown}
-          totalValue={totalValue}
-          selectedCategory={selectedCategory}
-          onSelect={setSelectedCategory}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} />
+      {slices.map((s) => (
+        <circle
+          key={s.id} cx={cx} cy={cy} r={r} fill="none"
+          stroke={s.color} strokeWidth={stroke - 2}
+          strokeDasharray={`${s.dash - 1.5} ${s.gap + 1.5}`}
+          strokeDashoffset={-s.offset}
+          strokeLinecap="round"
+          style={{ filter: `drop-shadow(0 0 6px ${s.color}80)` }}
         />
-      </div>
+      ))}
+    </svg>
+  );
+}
 
-      <div>
-        <div className="flex items-baseline justify-between pt-4 pb-3">
-          <p className="overline">
-            {selectedCategory ? 'Filtered positions' : 'All positions'}
-          </p>
-          <span className="text-xs text-text-muted tabular">
-            {filtered.length} {filtered.length !== totalAssets ? `of ${totalAssets}` : ''}
+interface Position {
+  id: number;
+  name: string;
+  ticker: string;
+  type: string;
+  value: number;
+  cost: number;
+  color: string;
+  icon: string;
+  weight: number;
+}
+
+function PositionCard({ pos, delay }: { pos: Position; delay: number }) {
+  const gain = pos.value - pos.cost;
+  const pct = ((gain / pos.cost) * 100).toFixed(2);
+  const isPos = gain >= 0;
+
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderRadius: 16,
+      padding: "14px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      marginBottom: 10,
+      backdropFilter: "blur(12px)",
+      animation: `slideIn 0.4s ${delay}s both`,
+      cursor: "pointer",
+      transition: "background 0.2s",
+    }}
+    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.07)"}
+    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)"}
+    >
+      <div style={{
+        width: 42, height: 42, borderRadius: 12,
+        background: `${pos.color}22`,
+        border: `1px solid ${pos.color}44`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 20, flexShrink: 0,
+        boxShadow: `0 0 12px ${pos.color}33`,
+      }}>
+        {pos.icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", letterSpacing: "0.01em" }}>{pos.name}</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>
+            {pos.value.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
           </span>
         </div>
-        <div className="space-y-2">
-          {filtered.map((asset, i) => (
-            <AssetCard key={asset.id} asset={asset} price={prices[asset.symbol]} index={i} />
-          ))}
-          {filtered.length === 0 && totalAssets > 0 && (
-            <div className="card p-12 text-center">
-              <p className="text-text-muted text-sm">No positions match this filter</p>
-            </div>
-          )}
-          {totalAssets === 0 && (
-            <div className="card p-12 text-center">
-              <p className="text-text-primary font-medium">No positions yet</p>
-              <p className="text-text-muted text-sm mt-1">
-                Head to Settings to add your first investment
-              </p>
-            </div>
-          )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <span style={{ fontSize: 11, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            {pos.ticker} · {pos.type}
+          </span>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 3,
+            background: isPos ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+            border: `1px solid ${isPos ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
+            borderRadius: 8, padding: "2px 8px",
+            boxShadow: isPos ? "0 0 8px rgba(16,185,129,0.2)" : "0 0 8px rgba(239,68,68,0.2)",
+          }}>
+            {isPos ? <TrendingUp size={11} color="#10b981" /> : <TrendingDown size={11} color="#ef4444" />}
+            <span style={{ fontSize: 12, fontWeight: 700, color: isPos ? "#10b981" : "#ef4444", letterSpacing: "0.02em" }}>
+              +{pct}%
+            </span>
+          </div>
         </div>
+        <div style={{ marginTop: 6, height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+          <div style={{
+            height: "100%", width: `${pos.weight}%`, background: pos.color,
+            borderRadius: 99,
+            boxShadow: `0 0 6px ${pos.color}80`,
+            transition: "width 1s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WealthSimulator() {
+  const [monthly, setMonthly] = useState(500);
+  const [years, setYears] = useState(10);
+  const rate = 0.09;
+  const months = years * 12;
+  const future = monthly * ((Math.pow(1 + rate / 12, months) - 1) / (rate / 12));
+  const invested = monthly * months;
+
+  return (
+    <div style={{
+      background: "rgba(99,102,241,0.07)",
+      border: "1px solid rgba(99,102,241,0.2)",
+      borderRadius: 20,
+      padding: 20,
+      margin: "20px 0",
+      backdropFilter: "blur(16px)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <Zap size={16} color="#6366f1" />
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6366f1" }}>
+          Simulador de Riqueza
+        </span>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>Aportación mensual</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>
+            {monthly.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+          </span>
+        </div>
+        <input type="range" min={100} max={3000} step={50} value={monthly}
+          onChange={e => setMonthly(+e.target.value)}
+          style={{ width: "100%", accentColor: "#6366f1", cursor: "pointer" }}
+        />
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "#94a3b8" }}>Horizonte temporal</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{years} años</span>
+        </div>
+        <input type="range" min={1} max={35} step={1} value={years}
+          onChange={e => setYears(+e.target.value)}
+          style={{ width: "100%", accentColor: "#6366f1", cursor: "pointer" }}
+        />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Capital invertido</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#e2e8f0" }}>
+            {invested.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+          </div>
+        </div>
+        <div style={{
+          background: "rgba(99,102,241,0.15)",
+          border: "1px solid rgba(99,102,241,0.3)",
+          borderRadius: 12, padding: "12px 14px",
+          boxShadow: "0 0 20px rgba(99,102,241,0.15)",
+        }}>
+          <div style={{ fontSize: 11, color: "#818cf8", marginBottom: 4 }}>Capital proyectado</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#a78bfa" }}>
+            {future.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, textAlign: "center" }}>
+        <span style={{ fontSize: 11, color: "#6366f1" }}>
+          ✦ Rentabilidad anual asumida: 9% (histórico S&P 500)
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function PortfolioPage() {
+  const animatedTotal = useCountUp(totalValue);
+  const [activeTab, setActiveTab] = useState("home");
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #0a0f1e 0%, #0d1a14 50%, #0a0f1e 100%)",
+      fontFamily: "'Inter', system-ui, sans-serif",
+      color: "#f1f5f9",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      <style>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+        }
+        input[type=range] { height: 4px; border-radius: 99px; }
+      `}</style>
+
+      {/* Mesh gradient blobs */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+        <div style={{ position: "absolute", top: -80, left: -80, width: 320, height: 320, borderRadius: "50%", background: "radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)" }} />
+        <div style={{ position: "absolute", top: 200, right: -100, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)" }} />
+        <div style={{ position: "absolute", bottom: 120, left: 40, width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle, rgba(16,185,129,0.05) 0%, transparent 70%)" }} />
+      </div>
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 430, margin: "0 auto", paddingBottom: 100 }}>
+        {/* Header */}
+        <div style={{ padding: "48px 20px 20px", animation: "slideIn 0.4s both" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#64748b", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 2 }}>
+                Patrimonio total
+              </div>
+              <div style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", display: "inline-block", animation: "pulse 2s infinite" }} />
+                Actualizado ahora
+              </div>
+            </div>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Bell size={16} color="#94a3b8" />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: 52, fontWeight: 200, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>
+              {animatedTotal.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: "rgba(16,185,129,0.12)",
+              border: "1px solid rgba(16,185,129,0.25)",
+              borderRadius: 8, padding: "4px 10px",
+              boxShadow: "0 0 12px rgba(16,185,129,0.15)",
+            }}>
+              <TrendingUp size={13} color="#10b981" />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#10b981" }}>+{totalPct}%</span>
+            </div>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              +{totalGain.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} total
+            </span>
+          </div>
+        </div>
+
+        {/* Donut + legend */}
+        <div style={{
+          margin: "0 20px 20px",
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 24,
+          padding: 20,
+          display: "flex",
+          alignItems: "center",
+          gap: 20,
+          backdropFilter: "blur(16px)",
+          animation: "slideIn 0.4s 0.1s both",
+        }}>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <DonutChart />
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748b" }}>Activos</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{positions.length}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            {positions.map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0, boxShadow: `0 0 6px ${p.color}` }} />
+                <span style={{ fontSize: 12, color: "#94a3b8", flex: 1 }}>{p.ticker}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0" }}>{p.weight}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Positions */}
+        <div style={{ padding: "0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, animation: "slideIn 0.4s 0.15s both" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#475569" }}>
+              Posiciones
+            </span>
+            <span style={{ fontSize: 12, color: "#6366f1", cursor: "pointer", display: "flex", alignItems: "center", gap: 2 }}>
+              Ver todo <ChevronRight size={12} />
+            </span>
+          </div>
+          {positions.map((pos, i) => (
+            <PositionCard key={pos.id} pos={pos} delay={0.2 + i * 0.07} />
+          ))}
+        </div>
+
+        {/* Simulator */}
+        <div style={{ padding: "0 20px", animation: "slideIn 0.4s 0.55s both" }}>
+          <WealthSimulator />
+        </div>
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{
+        position: "fixed",
+        bottom: 20,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "calc(100% - 48px)",
+        maxWidth: 380,
+        background: "rgba(10,15,30,0.75)",
+        backdropFilter: "blur(24px)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 24,
+        padding: "12px 8px",
+        display: "flex",
+        justifyContent: "space-around",
+        alignItems: "center",
+        zIndex: 100,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.05) inset",
+      }}>
+        {[
+          { icon: Home, label: "Inicio", id: "home" },
+          { icon: BarChart2, label: "Mercado", id: "market" },
+          { icon: PlusCircle, label: "Añadir", id: "add" },
+          { icon: Bell, label: "Alertas", id: "alerts" },
+          { icon: User, label: "Perfil", id: "profile" },
+        ].map(({ icon: Icon, label, id }) => {
+          const active = activeTab === id;
+          return (
+            <button key={id} onClick={() => setActiveTab(id)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                background: active ? "rgba(16,185,129,0.12)" : "transparent",
+                border: active ? "1px solid rgba(16,185,129,0.2)" : "1px solid transparent",
+                borderRadius: 14, padding: "8px 14px",
+                cursor: "pointer", transition: "all 0.2s",
+                minWidth: 54,
+              }}>
+              <Icon size={20} color={active ? "#10b981" : "#475569"} />
+              <span style={{ fontSize: 10, color: active ? "#10b981" : "#475569", letterSpacing: "0.04em", fontWeight: active ? 600 : 400 }}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
