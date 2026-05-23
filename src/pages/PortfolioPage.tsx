@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Bell, ChevronRight } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react';
 import { usePortfolioStore } from '../stores/portfolioStore';
 import { usePrices } from '../hooks/usePrices';
+import { useEurFx } from '../hooks/useEurFx';
+import { toEur } from '../services/fxService';
 import { PortfolioChart } from '../components/portfolio/PortfolioChart';
+import { PullToRefresh } from '../components/ui/PullToRefresh';
 import type { Asset } from '../types';
 
 const PALETTE = ['#10b981', '#6366f1', '#22d3ee', '#f59e0b', '#a78bfa', '#34d399', '#f87171', '#60a5fa'];
@@ -19,18 +23,20 @@ const CATEGORY_LABELS_ES: Record<string, string> = {
   stock: 'Acción',
 };
 
-function useCountUp(target: number, duration = 1800) {
+function useCountUp(target: number, duration = 1200) {
   const [val, setVal] = useState(0);
   useEffect(() => {
     let start: number | null = null;
+    let raf = 0;
     const step = (ts: number) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / duration, 1);
       setVal(Math.floor((1 - Math.pow(1 - p, 4)) * target));
-      if (p < 1) requestAnimationFrame(step);
+      if (p < 1) raf = requestAnimationFrame(step);
     };
-    requestAnimationFrame(step);
-  }, [target]);
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
   return val;
 }
 
@@ -134,137 +140,156 @@ function PositionCard({ data, delay }: { data: CardData; delay: number }) {
 
 export function PortfolioPage() {
   const assets = usePortfolioStore((s) => s.assets);
-  const { isLoading } = usePrices();
+  const { isLoading, refetch: refetchPrices } = usePrices();
+  const { rates, refresh: refetchFx } = useEurFx();
+  const qc = useQueryClient();
 
-  const totalValue = assets.reduce((sum, a) => sum + a.currentPrice * a.quantity, 0);
-  const totalCost  = assets.reduce((sum, a) => sum + a.avgPrice  * a.quantity, 0);
+  // EUR-converted figures. avgPrice is already in €; currentPrice goes
+  // through the FX layer so cross-currency holdings (USD, GBP, JPY, KRW…)
+  // are summed in a single, consistent denomination.
+  const cardData: CardData[] = assets.map((asset, i) => {
+    const value = toEur(asset.currentPrice, asset.currency, rates) * asset.quantity;
+    const cost  = asset.avgPrice * asset.quantity; // already EUR
+    return {
+      asset,
+      color: PALETTE[i % PALETTE.length],
+      weight: 0,
+      value,
+      cost,
+    };
+  });
+
+  const totalValue = cardData.reduce((sum, d) => sum + d.value, 0);
+  const totalCost  = cardData.reduce((sum, d) => sum + d.cost,  0);
   const totalGain  = totalValue - totalCost;
   const totalPct   = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(2) : '0.00';
   const isGain     = totalGain >= 0;
 
-  const animatedTotal = useCountUp(totalValue);
-
-  const cardData: CardData[] = assets.map((asset, i) => {
-    const value  = asset.currentPrice * asset.quantity;
-    const cost   = asset.avgPrice     * asset.quantity;
-    const weight = totalValue > 0 ? (value / totalValue) * 100 : 0;
-    return { asset, color: PALETTE[i % PALETTE.length], weight, value, cost };
+  // Fill weights now that totalValue is known
+  cardData.forEach((d) => {
+    d.weight = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
   });
+
+  const animatedTotal = useCountUp(totalValue);
 
   const slices: SliceData[] = cardData.map((d) => ({
     id: d.asset.id, color: d.color, weight: d.weight,
   }));
 
-  return (
-    <div style={{ color: '#f1f5f9' }}>
-      {/* Header */}
-      <div style={{ padding: '48px 20px 20px', animation: 'slideIn 0.4s both' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
-          <div>
-            <div style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>
-              Patrimonio total
-            </div>
-            <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, color: '#64748b' }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: isLoading ? '#f59e0b' : '#10b981',
-                display: 'inline-block', animation: 'pulse 2s infinite',
-              }} />
-              {isLoading ? 'Actualizando…' : 'Actualizado ahora'}
-            </div>
-          </div>
-          <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Bell size={16} color="#94a3b8" />
-          </div>
-        </div>
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchPrices(),
+      refetchFx(),
+      qc.invalidateQueries({ queryKey: ['news'] }),
+    ]);
+  };
 
-        <div style={{ marginBottom: 6 }}>
-          <span style={{ fontSize: 52, fontWeight: 200, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>
-            {animatedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            background: isGain ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
-            border: `1px solid ${isGain ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
-            borderRadius: 8, padding: '4px 10px',
-            boxShadow: isGain ? '0 0 12px rgba(16,185,129,0.15)' : '0 0 12px rgba(239,68,68,0.15)',
-          }}>
-            {isGain ? <TrendingUp size={13} color="#10b981" /> : <TrendingDown size={13} color="#ef4444" />}
-            <span style={{ fontSize: 13, fontWeight: 700, color: isGain ? '#10b981' : '#ef4444' }}>
-              {isGain ? '+' : ''}{totalPct}%
+  return (
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div style={{ color: '#f1f5f9' }}>
+        {/* Header — unified typography (no bell icon) */}
+        <div style={{ padding: '40px 20px 20px', animation: 'slideIn 0.4s both' }}>
+          <h1
+            style={{
+              fontSize: 32, fontWeight: 700, letterSpacing: '-0.025em',
+              color: '#F8FAFC', margin: 0,
+            }}
+          >
+            Patrimonio actual
+          </h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: isLoading ? '#f59e0b' : '#10b981',
+              display: 'inline-block', animation: 'pulse 2s infinite',
+            }} />
+            {isLoading ? 'Actualizando precios…' : 'Datos en directo · Yahoo Finance'}
+          </p>
+
+          <div style={{ marginTop: 26 }}>
+            <span style={{ fontSize: 52, fontWeight: 200, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>
+              {animatedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
             </span>
           </div>
-          <span style={{ fontSize: 12, color: '#64748b' }}>
-            {isGain ? '+' : ''}{totalGain.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })} total
-          </span>
-        </div>
-      </div>
-
-      {/* Portfolio chart — recharts area, ready for live tick stream */}
-      <PortfolioChart
-        currentValue={totalValue}
-        costBasis={totalCost}
-        isLoading={isLoading}
-      />
-
-      {/* Donut + legend */}
-      <div style={{
-        margin: '0 20px 20px',
-        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-        borderRadius: 24, padding: 20,
-        display: 'flex', alignItems: 'center', gap: 20,
-        backdropFilter: 'blur(16px)', animation: 'slideIn 0.4s 0.1s both',
-      }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <DonutChart slices={slices} />
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Activos</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{assets.length}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: isGain ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${isGain ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+              borderRadius: 8, padding: '4px 10px',
+              boxShadow: isGain ? '0 0 12px rgba(16,185,129,0.15)' : '0 0 12px rgba(239,68,68,0.15)',
+            }}>
+              {isGain ? <TrendingUp size={13} color="#10b981" /> : <TrendingDown size={13} color="#ef4444" />}
+              <span style={{ fontSize: 13, fontWeight: 700, color: isGain ? '#10b981' : '#ef4444' }}>
+                {isGain ? '+' : ''}{totalPct}%
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              {isGain ? '+' : ''}{totalGain.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })} total
+            </span>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
-          {cardData.map((d) => (
-            <div key={d.asset.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0, boxShadow: `0 0 6px ${d.color}` }} />
-              <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{d.asset.symbol}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>{d.weight.toFixed(0)}%</span>
+
+        {/* Portfolio chart */}
+        <PortfolioChart
+          currentValue={totalValue}
+          costBasis={totalCost}
+          isLoading={isLoading}
+        />
+
+        {/* Donut + legend */}
+        <div style={{
+          margin: '0 20px 20px',
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 24, padding: 20,
+          display: 'flex', alignItems: 'center', gap: 20,
+          backdropFilter: 'blur(16px)', animation: 'slideIn 0.4s 0.1s both',
+        }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <DonutChart slices={slices} />
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 11, color: '#64748b' }}>Activos</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{assets.length}</div>
             </div>
-          ))}
+          </div>
+          <div style={{ flex: 1 }}>
+            {cardData.map((d) => (
+              <div key={d.asset.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0, boxShadow: `0 0 6px ${d.color}` }} />
+                <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{d.asset.symbol}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>{d.weight.toFixed(0)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Positions */}
+        <div style={{ padding: '0 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, animation: 'slideIn 0.4s 0.15s both' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#475569' }}>
+              Posiciones
+            </span>
+            <span style={{ fontSize: 12, color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}>
+              Ver todo <ChevronRight size={12} />
+            </span>
+          </div>
+
+          {cardData.length > 0
+            ? cardData.map((d, i) => (
+                <PositionCard key={d.asset.id} data={d} delay={0.2 + i * 0.07} />
+              ))
+            : (
+              <div style={{
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 16, padding: '48px 20px', textAlign: 'center',
+              }}>
+                <p style={{ color: '#f1f5f9', fontWeight: 600 }}>Sin posiciones</p>
+                <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Ve a Perfil para añadir tu primera inversión</p>
+              </div>
+            )
+          }
         </div>
       </div>
-
-      {/* Positions */}
-      <div style={{ padding: '0 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, animation: 'slideIn 0.4s 0.15s both' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#475569' }}>
-            Posiciones
-          </span>
-          <span style={{ fontSize: 12, color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}>
-            Ver todo <ChevronRight size={12} />
-          </span>
-        </div>
-
-        {cardData.length > 0
-          ? cardData.map((d, i) => (
-              <PositionCard key={d.asset.id} data={d} delay={0.2 + i * 0.07} />
-            ))
-          : (
-            <div style={{
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 16, padding: '48px 20px', textAlign: 'center',
-            }}>
-              <p style={{ color: '#f1f5f9', fontWeight: 600 }}>Sin posiciones</p>
-              <p style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Ve a Perfil para añadir tu primera inversión</p>
-            </div>
-          )
-        }
-      </div>
-    </div>
+    </PullToRefresh>
   );
 }

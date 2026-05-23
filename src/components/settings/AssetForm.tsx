@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '../../constants/theme';
 import {
   searchSymbols,
-  findSymbol,
-  fetchPrice,
+  fetchQuote,
   type SymbolMatch,
-} from '../../services/alphaVantage';
+} from '../../services/yahooFinance';
+import { toEur } from '../../services/fxService';
+import { useEurFx } from '../../hooks/useEurFx';
 import { useUIStore } from '../../stores/uiStore';
 import type { Asset, AssetCategory } from '../../types';
 
@@ -17,31 +18,31 @@ interface Props {
 }
 
 const CATEGORIES: AssetCategory[] = ['index-fund', 'etf', 'stock'];
-const CURRENCIES: Array<'USD' | 'EUR'> = ['USD', 'EUR'];
 
 export function AssetForm({ open, asset, onClose, onSave }: Props) {
-  // Selected ticker (the only field that lets the user save).
+  // Validated ticker from Yahoo search. Save is blocked unless this is set.
   const [match, setMatch] = useState<SymbolMatch | null>(null);
 
-  // Search UI state.
+  // Search UI state
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SymbolMatch[]>([]);
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Price metadata for the selected ticker.
+  // Live price (native currency) + EUR equivalent
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
 
-  // Position fields.
+  // Position fields (avgPrice is ALWAYS EUR — the user's cost basis in €)
   const [quantity, setQuantity] = useState('');
   const [avgPrice, setAvgPrice] = useState('');
   const [category, setCategory] = useState<AssetCategory>('stock');
-  const [currency, setCurrency] = useState<'USD' | 'EUR'>('USD');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hide bottom nav while this modal is mounted.
+  const { rates } = useEurFx();
+
+  // Hide bottom nav while modal is mounted
   const openModal = useUIStore((s) => s.openModal);
   const closeModal = useUIStore((s) => s.closeModal);
   useEffect(() => {
@@ -50,11 +51,11 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
     return () => closeModal();
   }, [open, openModal, closeModal]);
 
-  // Reset / hydrate when the modal opens.
+  // Reset/hydrate on open
   useEffect(() => {
     if (!open) return;
     if (asset) {
-      const known = findSymbol(asset.symbol) ?? {
+      const known: SymbolMatch = {
         symbol: asset.symbol,
         name: asset.name,
         category: asset.category,
@@ -65,7 +66,6 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
       setQuantity(asset.quantity.toString());
       setAvgPrice(asset.avgPrice.toString());
       setCategory(asset.category);
-      setCurrency(asset.currency);
       setLivePrice(asset.currentPrice);
     } else {
       setMatch(null);
@@ -76,11 +76,10 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
       setQuantity('');
       setAvgPrice('');
       setCategory('stock');
-      setCurrency('USD');
     }
   }, [asset, open]);
 
-  // Debounced search.
+  // Debounced Yahoo search
   useEffect(() => {
     if (!open) return;
     if (match && query === `${match.symbol} — ${match.name}`) {
@@ -92,6 +91,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
     if (!query.trim()) {
       setResults([]);
       setShowDropdown(false);
+      setSearching(false);
       return;
     }
     setSearching(true);
@@ -100,7 +100,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
       setResults(r);
       setShowDropdown(true);
       setSearching(false);
-    }, 250);
+    }, 280);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -110,15 +110,20 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
     setMatch(m);
     setQuery(`${m.symbol} — ${m.name}`);
     setCategory(m.category);
-    setCurrency(m.currency);
     setShowDropdown(false);
     setPriceLoading(true);
     try {
-      const p = await fetchPrice(m.symbol);
-      if (p.price > 0) {
-        setLivePrice(p.price);
-        // Pre-fill avgPrice with the live price as a sensible default if empty
-        if (!avgPrice) setAvgPrice(p.price.toFixed(2));
+      const q = await fetchQuote(m.symbol);
+      if (q && q.price > 0) {
+        setLivePrice(q.price);
+        // Sync currency from the actual quote (Yahoo's search currency is
+        // sometimes stale on cross-listed tickers).
+        setMatch({ ...m, currency: q.currency || m.currency });
+        // Pre-fill avgPrice in EUR if empty
+        if (!avgPrice) {
+          const eur = toEur(q.price, q.currency || m.currency, rates);
+          setAvgPrice(eur.toFixed(2));
+        }
       } else {
         setLivePrice(null);
       }
@@ -130,7 +135,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
   };
 
   const handleSave = () => {
-    if (!match) return; // hard block: no validated ticker → no save
+    if (!match) return;
     const q = parseFloat(quantity);
     const p = parseFloat(avgPrice);
     if (isNaN(q) || q <= 0 || isNaN(p) || p <= 0) return;
@@ -138,9 +143,9 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
       symbol: match.symbol,
       name: match.name,
       quantity: q,
-      avgPrice: p,
+      avgPrice: p, // EUR cost basis
       category,
-      currency,
+      currency: match.currency, // native ticker currency
       currentPrice: livePrice ?? undefined,
     });
     onClose();
@@ -154,6 +159,9 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
     parseFloat(quantity) > 0 &&
     !isNaN(parseFloat(avgPrice)) &&
     parseFloat(avgPrice) > 0;
+
+  const livePriceEur =
+    livePrice != null && match ? toEur(livePrice, match.currency, rates) : null;
 
   return (
     <>
@@ -219,7 +227,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                 {asset ? 'Editar posición' : 'Nueva posición'}
               </h3>
               <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>
-                {asset ? 'Modifica los datos de tu activo' : 'Busca un activo real para añadirlo'}
+                {asset ? 'Modifica los datos de tu activo' : 'Busca cualquier activo (acciones, ETFs, fondos…)'}
               </p>
             </div>
             <button
@@ -238,14 +246,14 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
             </button>
           </div>
 
-          {/* Scrollable form body */}
+          {/* Body */}
           <div style={{
             overflowY: 'auto', flex: 1, padding: '8px 24px 32px',
             WebkitOverflowScrolling: 'touch',
           }}>
             {/* Search */}
             <div style={{ marginBottom: 14, position: 'relative' }}>
-              <Label text="Activo" hint="Busca por ticker o nombre" />
+              <Label text="Activo" hint="ISIN, ticker o nombre completo" />
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
@@ -255,7 +263,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                     if (match) setMatch(null);
                   }}
                   onFocus={() => results.length > 0 && setShowDropdown(true)}
-                  placeholder="Ej: MSCI Global Semiconductors, NVDA, ASML..."
+                  placeholder="Fidelity S&P 500, SK Hynix, MSFT, ASML.AS…"
                   className="af-input"
                   style={{ paddingLeft: 42 }}
                   autoFocus={!asset}
@@ -296,7 +304,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                     border: '1px solid rgba(255,255,255,0.12)',
                     borderRadius: 14, padding: 6,
                     boxShadow: '0 16px 40px rgba(0,0,0,0.55)',
-                    zIndex: 5, maxHeight: 260, overflowY: 'auto',
+                    zIndex: 5, maxHeight: 300, overflowY: 'auto',
                   }}>
                     {results.map((r) => (
                       <button
@@ -315,7 +323,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                         <span style={{
                           fontFamily: 'ui-monospace, SF Mono, monospace',
                           fontSize: 13, fontWeight: 700, color: '#10b981',
-                          minWidth: 56,
+                          minWidth: 72,
                         }}>
                           {r.symbol}
                         </span>
@@ -323,14 +331,14 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                           {r.name}
                         </span>
                         <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          {r.exchange ?? r.category}
+                          {r.exchange || r.currency}
                         </span>
                       </button>
                     ))}
                   </div>
                 )}
 
-                {showDropdown && !searching && query.trim() && results.length === 0 && (
+                {showDropdown && !searching && query.trim().length > 1 && results.length === 0 && (
                   <div style={{
                     position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
                     background: 'rgba(20, 28, 46, 0.98)',
@@ -338,12 +346,12 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                     borderRadius: 14, padding: '14px 16px',
                     fontSize: 13, color: '#fca5a5', zIndex: 5,
                   }}>
-                    No se encontró ningún activo con ese nombre o ticker.
+                    No se encontró ningún activo. Comprueba el nombre o prueba con el ISIN.
                   </div>
                 )}
               </div>
 
-              {/* Live price chip */}
+              {/* Live price chip (native + EUR) */}
               {match && (
                 <div style={{
                   marginTop: 10,
@@ -351,18 +359,20 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                   border: '1px solid rgba(16,185,129,0.22)',
                   borderRadius: 12, padding: '10px 14px',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 8,
                 }}>
                   <span style={{ fontSize: 11, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    Precio en mercado
+                    Cotización
                   </span>
                   <span style={{
-                    fontSize: 15, fontWeight: 700, color: '#10b981',
+                    fontSize: 14, fontWeight: 700, color: '#10b981',
                     fontFamily: 'ui-monospace, SF Mono, monospace',
+                    textAlign: 'right',
                   }}>
                     {priceLoading
                       ? 'Cargando…'
-                      : livePrice
-                        ? livePrice.toLocaleString('en-US', { style: 'currency', currency: match.currency, maximumFractionDigits: 2 })
+                      : livePrice && livePriceEur != null
+                        ? `${formatNative(livePrice, match.currency)} · ${formatEur(livePriceEur)}`
                         : '—'}
                   </span>
                 </div>
@@ -372,7 +382,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
             {/* Quantity + Avg price */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
-                <Label text="Cantidad" hint="Acciones" />
+                <Label text="Cantidad" hint="Participaciones" />
                 <input
                   type="number"
                   value={quantity}
@@ -385,7 +395,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                 />
               </div>
               <div>
-                <Label text="Precio medio" hint={`Por acción (${currency})`} />
+                <Label text="Precio medio" hint="Coste por unidad (€)" />
                 <input
                   type="number"
                   value={avgPrice}
@@ -396,34 +406,6 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                   min="0"
                   disabled={!match}
                 />
-              </div>
-            </div>
-
-            {/* Currency */}
-            <div style={{ marginBottom: 14 }}>
-              <Label text="Divisa" />
-              <div style={{
-                display: 'flex', gap: 6,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1.5px solid rgba(255,255,255,0.08)',
-                borderRadius: 14, padding: 5,
-              }}>
-                {CURRENCIES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCurrency(c)}
-                    style={{
-                      flex: 1, padding: '9px 0', borderRadius: 10,
-                      background: currency === c ? 'rgba(16,185,129,0.15)' : 'transparent',
-                      border: currency === c ? '1px solid rgba(16,185,129,0.35)' : '1px solid transparent',
-                      color: currency === c ? '#10b981' : '#64748b',
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      transition: 'all 0.18s',
-                    }}
-                  >
-                    {c}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -488,7 +470,7 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                   background: 'transparent',
                   border: '1.5px solid rgba(255,255,255,0.10)', borderRadius: 20,
                   color: '#64748b', fontSize: 15, fontWeight: 500,
-                  cursor: 'pointer', transition: 'border-color 0.18s, color 0.18s',
+                  cursor: 'pointer',
                 }}
               >
                 Cancelar
@@ -499,6 +481,26 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
       </div>
     </>
   );
+}
+
+function formatNative(price: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency === 'GBp' ? 'GBP' : currency,
+      maximumFractionDigits: 2,
+    }).format(currency === 'GBp' ? price / 100 : price);
+  } catch {
+    return `${price.toFixed(2)} ${currency}`;
+  }
+}
+
+function formatEur(amount: number): string {
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 function Label({ text, hint }: { text: string; hint?: string }) {

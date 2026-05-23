@@ -5,10 +5,14 @@ export interface Asset {
   symbol: string;
   name: string;
   quantity: number;
+  /** Cost basis per share, always stored in EUR (user enters in €). */
   avgPrice: number;
+  /** Last known market price in the asset's NATIVE currency (see `currency`).
+      UI converts to EUR via `useEurFx` + `toEur()` for all displayed math. */
   currentPrice: number;
   category: AssetCategory;
-  currency: 'USD' | 'EUR';
+  /** Native currency reported by Yahoo for this ticker. */
+  currency: string;
 }
 
 export interface PriceData {

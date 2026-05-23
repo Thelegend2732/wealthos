@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Asset, AssetCategory, PriceData } from '../types';
-import { KNOWN_MOCK_SYMBOLS } from '../services/alphaVantage';
 
 interface PortfolioStore {
   assets: Asset[];
@@ -23,12 +22,15 @@ interface PortfolioStore {
   getFilteredAssets: () => Asset[];
 }
 
+// avgPrice is the EUR cost basis (what the user paid per share in €),
+// currentPrice is the latest market quote in the asset's NATIVE currency.
+// On first load Yahoo will overwrite currentPrice with the real quote.
 const INITIAL_ASSETS: Asset[] = [
-  { id: '1', symbol: 'VOO', name: 'Vanguard S&P 500 ETF', quantity: 10, avgPrice: 420, currentPrice: 420, category: 'index-fund', currency: 'USD' },
-  { id: '2', symbol: 'QQQ', name: 'Invesco Nasdaq 100 ETF', quantity: 5, avgPrice: 380, currentPrice: 380, category: 'index-fund', currency: 'USD' },
-  { id: '3', symbol: 'SOXX', name: 'iShares Semiconductor ETF', quantity: 8, avgPrice: 220, currentPrice: 220, category: 'etf', currency: 'USD' },
-  { id: '4', symbol: 'NVDA', name: 'NVIDIA Corporation', quantity: 15, avgPrice: 680, currentPrice: 680, category: 'stock', currency: 'USD' },
-  { id: '5', symbol: 'ASML', name: 'ASML Holding', quantity: 3, avgPrice: 750, currentPrice: 750, category: 'stock', currency: 'USD' },
+  { id: '1', symbol: 'VOO',  name: 'Vanguard S&P 500 ETF',        quantity: 10, avgPrice: 480, currentPrice: 540, category: 'index-fund', currency: 'USD' },
+  { id: '2', symbol: 'QQQ',  name: 'Invesco Nasdaq 100 ETF',      quantity: 5,  avgPrice: 445, currentPrice: 498, category: 'index-fund', currency: 'USD' },
+  { id: '3', symbol: 'SOXX', name: 'iShares Semiconductor ETF',   quantity: 8,  avgPrice: 215, currentPrice: 248, category: 'etf',        currency: 'USD' },
+  { id: '4', symbol: 'NVDA', name: 'NVIDIA Corporation',          quantity: 15, avgPrice: 750, currentPrice: 942, category: 'stock',      currency: 'USD' },
+  { id: '5', symbol: 'ASML', name: 'ASML Holding',                quantity: 3,  avgPrice: 850, currentPrice: 894, category: 'stock',      currency: 'USD' },
 ];
 
 export const usePortfolioStore = create<PortfolioStore>()(
@@ -46,11 +48,7 @@ export const usePortfolioStore = create<PortfolioStore>()(
           prices: { ...s.prices, ...prices },
           assets: s.assets.map((a) => {
             const p = prices[a.symbol];
-            if (!p || p.price <= 0) return a;
-            // If the price is from the mock/delayed fallback and we don't have
-            // a curated mock for this symbol, keep the user-entered avgPrice
-            // rather than overwriting with the generic 0 sentinel.
-            if (p.isDelayed && !KNOWN_MOCK_SYMBOLS.has(a.symbol)) return a;
+            if (!p || !Number.isFinite(p.price) || p.price <= 0) return a;
             return { ...a, currentPrice: p.price };
           }),
           lastUpdated: Date.now(),

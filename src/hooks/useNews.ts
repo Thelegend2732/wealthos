@@ -7,7 +7,11 @@ export function useNews(category: NewsItem['category']) {
   const query = useQuery({
     queryKey: ['news', category],
     queryFn: () => fetchNews(category),
-    staleTime: 60 * 60 * 1000,
+    // Poll every 5 min in the background so headlines stay fresh without
+    // forcing the user to refresh manually.
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
     retry: 0,
   });
 

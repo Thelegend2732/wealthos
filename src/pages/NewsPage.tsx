@@ -4,6 +4,7 @@ import { useNews } from '../hooks/useNews';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CategoryTabs } from '../components/news/CategoryTabs';
 import { NewsCard } from '../components/news/NewsCard';
+import { PullToRefresh } from '../components/ui/PullToRefresh';
 import { relativeTime } from '../constants/theme';
 import { useUIStore } from '../stores/uiStore';
 import type { NewsItem } from '../types';
@@ -31,10 +32,11 @@ export function NewsPage() {
   };
 
   return (
+    <PullToRefresh onRefresh={() => refresh()}>
     <div className="space-y-6" style={{ padding: '0 20px 0' }}>
       <PageHeader
-        title="Markets"
-        subtitle="Curated financial news"
+        title="Noticias"
+        subtitle="Actualidad financiera en directo"
         right={
           <button onClick={() => refresh()} className="icon-btn" aria-label="Refresh news">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -234,5 +236,6 @@ export function NewsPage() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }
