@@ -1,8 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { PieChart } from 'react-native-gifted-charts';
 import { AssetCategory } from '../../types';
-import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '../../constants/theme';
+import {
+  CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  COLORS,
+  FONT_SIZE,
+  FONT_WEIGHT,
+  RADIUS,
+  SPACING,
+} from '../../constants/theme';
 
 interface Props {
   breakdown: Record<AssetCategory, number>;
@@ -11,62 +18,59 @@ interface Props {
 
 const CATEGORY_ORDER: AssetCategory[] = ['index-fund', 'etf', 'stock'];
 
+/**
+ * Custom horizontal stacked bar chart that mimics a pie-chart legend.
+ * Pure View + flexbox — no SVG, no chart library, web-safe.
+ */
 export default function PortfolioPieChart({ breakdown, totalValue }: Props) {
-  const data = CATEGORY_ORDER
+  if (totalValue === 0) return null;
+
+  const segments = CATEGORY_ORDER
     .filter((cat) => breakdown[cat] > 0)
     .map((cat) => ({
+      cat,
       value: breakdown[cat],
+      pct: (breakdown[cat] / totalValue) * 100,
       color: CATEGORY_COLORS[cat],
-      text: `${((breakdown[cat] / totalValue) * 100).toFixed(0)}%`,
     }));
-
-  if (totalValue === 0) return null;
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Allocation</Text>
-      <View style={styles.content}>
-        <PieChart
-          data={data}
-          donut
-          radius={70}
-          innerRadius={44}
-          centerLabelComponent={() => (
-            <View style={styles.center}>
-              <Text style={styles.centerText}>
-                {data.length}
+
+      {/* Stacked horizontal bar */}
+      <View style={styles.barTrack}>
+        {segments.map((s, idx) => (
+          <View
+            key={s.cat}
+            style={[
+              styles.barSegment,
+              {
+                flex: s.pct,
+                backgroundColor: s.color,
+                borderLeftWidth: idx === 0 ? 0 : 2,
+                borderColor: COLORS.bg,
+              },
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Legend with percentages */}
+      <View style={styles.legend}>
+        {segments.map((s) => (
+          <View key={s.cat} style={styles.legendItem}>
+            <View style={[styles.dot, { backgroundColor: s.color }]} />
+            <View style={styles.legendText}>
+              <Text style={styles.legendLabel} numberOfLines={1}>
+                {CATEGORY_LABELS[s.cat]}
               </Text>
-              <Text style={styles.centerSub}>types</Text>
+              <Text style={[styles.legendPct, { color: s.color }]}>
+                {s.pct.toFixed(1)}%
+              </Text>
             </View>
-          )}
-          showText
-          textColor={COLORS.textPrimary}
-          textSize={11}
-          fontWeight="600"
-          innerCircleColor={COLORS.surface}
-          strokeWidth={2}
-          strokeColor={COLORS.bg}
-          isAnimated
-          animationDuration={800}
-        />
-        <View style={styles.legend}>
-          {CATEGORY_ORDER.map((cat) => {
-            const value = breakdown[cat];
-            if (value === 0) return null;
-            const pct = ((value / totalValue) * 100).toFixed(1);
-            return (
-              <View key={cat} style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: CATEGORY_COLORS[cat] }]} />
-                <View style={styles.legendText}>
-                  <Text style={styles.legendLabel}>{CATEGORY_LABELS[cat]}</Text>
-                  <Text style={[styles.legendPct, { color: CATEGORY_COLORS[cat] }]}>
-                    {pct}%
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -78,7 +82,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.card,
     padding: SPACING.md,
     marginHorizontal: SPACING.md,
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   title: {
     fontSize: FONT_SIZE.sm,
@@ -87,25 +91,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  content: {
+  barTrack: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
+    height: 14,
+    borderRadius: 7,
+    overflow: 'hidden',
+    backgroundColor: COLORS.border,
   },
-  center: {
-    alignItems: 'center',
-  },
-  centerText: {
-    fontSize: FONT_SIZE.xl,
-    color: COLORS.textPrimary,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  centerSub: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
+  barSegment: {
+    height: '100%',
   },
   legend: {
-    flex: 1,
     gap: SPACING.sm,
   },
   legendItem: {
