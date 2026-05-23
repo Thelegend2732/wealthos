@@ -24,39 +24,42 @@ export function ContributionForm({
   const yearsPct = ((years - 1) / 39) * 100;
 
   return (
-    <section className="card p-6 space-y-5 animate-slide-up">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs uppercase tracking-[0.15em] text-text-secondary font-semibold">
-          Configuration
-        </h3>
+    <section className="card p-8 animate-slide-up">
+      <div className="flex items-center justify-between mb-8">
+        <p className="overline">Configuration</p>
         <button
           onClick={onCurrency}
-          className="px-3 py-1.5 rounded-lg bg-border hover:bg-border-strong text-text-primary text-sm font-semibold transition-colors flex items-center gap-1.5"
+          className="text-xs text-text-secondary hover:text-text-primary font-medium transition-colors flex items-center gap-1.5"
         >
-          <span>{currency === 'USD' ? '🇺🇸' : '🇪🇺'}</span>
           {currency}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </button>
       </div>
 
-      <Field
-        label="Initial Capital"
-        symbol={SYMBOLS[currency]}
-        value={initialCapital}
-        onChange={onCapital}
-      />
-      <Field
-        label="Monthly Contribution"
-        symbol={SYMBOLS[currency]}
-        value={monthlyContribution}
-        onChange={onMonthly}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+        <Field
+          label="Initial Capital"
+          symbol={SYMBOLS[currency]}
+          value={initialCapital}
+          onChange={onCapital}
+        />
+        <Field
+          label="Monthly Contribution"
+          symbol={SYMBOLS[currency]}
+          value={monthlyContribution}
+          onChange={onMonthly}
+        />
+      </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm text-text-secondary font-semibold">
-            Projection Period
-          </label>
-          <span className="text-base font-bold text-primary tabular">{years} years</span>
+        <div className="flex items-baseline justify-between mb-4">
+          <label className="overline">Projection Period</label>
+          <span className="text-lg font-semibold text-text-primary tabular tracking-tight-2">
+            {years}
+            <span className="text-sm font-normal text-text-muted ml-1">years</span>
+          </span>
         </div>
         <input
           type="range"
@@ -68,10 +71,12 @@ export function ContributionForm({
           className="w-full"
           style={{ ['--range-pct' as string]: `${yearsPct}%` }}
         />
-        <div className="flex justify-between text-[11px] text-text-muted mt-2">
-          <span>1 yr</span>
-          <span>20 yrs</span>
-          <span>40 yrs</span>
+        <div className="flex justify-between text-[11px] text-text-faint mt-2 tabular">
+          <span>1y</span>
+          <span>10y</span>
+          <span>20y</span>
+          <span>30y</span>
+          <span>40y</span>
         </div>
       </div>
     </section>
@@ -91,11 +96,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm text-text-secondary font-semibold mb-2">
-        {label}
-      </label>
-      <div className="flex items-center gap-2 bg-bg border border-border rounded-xl px-4 h-12 focus-within:border-primary transition-colors">
-        <span className="text-text-secondary font-semibold">{symbol}</span>
+      <label className="overline">{label}</label>
+      <div className="flex items-center gap-2 mt-2 border-b border-border focus-within:border-border-strong transition-colors pb-2">
+        <span className="text-text-muted font-medium">{symbol}</span>
         <input
           type="number"
           value={value || ''}
@@ -103,7 +106,7 @@ function Field({
             const n = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
             onChange(isNaN(n) ? 0 : n);
           }}
-          className="flex-1 bg-transparent outline-none text-text-primary font-semibold tabular text-base placeholder:text-text-muted"
+          className="flex-1 bg-transparent outline-none text-text-primary font-medium tabular text-xl tracking-tight-2 placeholder:text-text-faint"
           placeholder="0"
         />
       </div>

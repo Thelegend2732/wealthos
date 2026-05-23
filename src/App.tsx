@@ -3,6 +3,7 @@ import { Layout } from './components/layout/Layout';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { NewsPage } from './pages/NewsPage';
 import { DCAPage } from './pages/DCAPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<PortfolioPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/dca" element={<DCAPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

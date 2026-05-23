@@ -24,62 +24,55 @@ export function ScenarioSummary({
   const multiplier = totalContributed > 0 ? moderate / totalContributed : 1;
 
   return (
-    <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-slide-up" style={{ animationDelay: '120ms' }}>
-      <Card
-        label="Final Value (10%)"
-        value={formatCompact(moderate, currency)}
-        color="#00D4AA"
-        primary
-      />
-      <Card
-        label="Total Contributed"
-        value={formatCompact(totalContributed, currency)}
-        color="#8B8FA8"
-      />
-      <Card
-        label="Interest Generated"
-        value={formatCompact(interest, currency)}
-        color="#6C63FF"
-      />
-      <Card
-        label="Money Multiplier"
-        value={`${multiplier.toFixed(1)}×`}
-        color="#FF8C42"
-        sub={`Worked ${multiplier.toFixed(1)}× harder`}
-      />
+    <section className="card p-8 animate-slide-up" style={{ animationDelay: '120ms' }}>
+      <p className="overline mb-6">Projected Outcome · 10% scenario</p>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+        <Stat
+          label="Final Value"
+          value={formatCompact(moderate, currency)}
+          tone="success"
+        />
+        <Stat
+          label="Contributed"
+          value={formatCompact(totalContributed, currency)}
+        />
+        <Stat
+          label="Interest Earned"
+          value={formatCompact(interest, currency)}
+        />
+        <Stat
+          label="Multiplier"
+          value={`${multiplier.toFixed(1)}×`}
+          sub={`Money worked ${multiplier.toFixed(1)}× harder`}
+        />
+      </div>
     </section>
   );
 }
 
-function Card({
+function Stat({
   label,
   value,
-  color,
   sub,
-  primary,
+  tone,
 }: {
   label: string;
   value: string;
-  color: string;
   sub?: string;
-  primary?: boolean;
+  tone?: 'success' | 'neutral';
 }) {
   return (
-    <div
-      className="card p-4 relative overflow-hidden"
-      style={primary ? { boxShadow: `0 0 32px -16px ${color}` } : undefined}
-    >
-      {primary && (
-        <div
-          className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-20 pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${color}, transparent 70%)` }}
-        />
-      )}
-      <p className="text-[10px] uppercase tracking-wider text-text-secondary font-bold">{label}</p>
-      <p className="text-2xl font-bold mt-1 tabular" style={{ color }}>
+    <div className="min-w-0">
+      <p className="overline">{label}</p>
+      <p
+        className={`text-display-md tabular tracking-tight-2 mt-2 ${
+          tone === 'success' ? 'text-success-text' : 'text-text-primary'
+        }`}
+      >
         {value}
       </p>
-      {sub && <p className="text-[11px] text-text-muted mt-1">{sub}</p>}
+      {sub && <p className="text-[11px] text-text-muted mt-2">{sub}</p>}
     </div>
   );
 }

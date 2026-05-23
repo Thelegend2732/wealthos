@@ -19,9 +19,10 @@ export function PortfolioPage() {
   const setSelectedCategory = usePortfolioStore((s) => s.setSelectedCategory);
   const prices = usePortfolioStore((s) => s.prices);
   const lastUpdated = usePortfolioStore((s) => s.lastUpdated);
+  const totalAssets = usePortfolioStore((s) => s.assets.length);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title="WealthOS"
         subtitle={lastUpdated ? `Updated ${relativeTime(new Date(lastUpdated))}` : 'Loading prices…'}
@@ -29,16 +30,16 @@ export function PortfolioPage() {
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="w-10 h-10 rounded-full bg-primary/15 hover:bg-primary/25 text-primary flex items-center justify-center transition-all disabled:opacity-50"
+            className="icon-btn disabled:opacity-50"
             aria-label="Refresh prices"
           >
             <svg
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
               className={isFetching ? 'animate-spin' : ''}
@@ -59,7 +60,7 @@ export function PortfolioPage() {
         isLoading={isLoading}
       />
 
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid lg:grid-cols-2 gap-6">
         <AllocationChart breakdown={breakdown} totalValue={totalValue} />
         <CategoryBreakdown
           breakdown={breakdown}
@@ -69,20 +70,30 @@ export function PortfolioPage() {
         />
       </div>
 
-      <div className="pt-2">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-xs uppercase tracking-[0.15em] text-text-secondary font-semibold">
-            {selectedCategory ? `${filtered.length} filtered position${filtered.length !== 1 ? 's' : ''}` : 'All Positions'}
-          </h2>
-          <span className="text-xs text-text-muted">{filtered.length} of {usePortfolioStore.getState().assets.length}</span>
+      <div>
+        <div className="flex items-baseline justify-between pt-4 pb-3">
+          <p className="overline">
+            {selectedCategory ? 'Filtered positions' : 'All positions'}
+          </p>
+          <span className="text-xs text-text-muted tabular">
+            {filtered.length} {filtered.length !== totalAssets ? `of ${totalAssets}` : ''}
+          </span>
         </div>
-        <div className="grid gap-3">
+        <div className="space-y-2">
           {filtered.map((asset, i) => (
             <AssetCard key={asset.id} asset={asset} price={prices[asset.symbol]} index={i} />
           ))}
-          {filtered.length === 0 && (
+          {filtered.length === 0 && totalAssets > 0 && (
             <div className="card p-12 text-center">
-              <p className="text-text-muted">No positions match this filter</p>
+              <p className="text-text-muted text-sm">No positions match this filter</p>
+            </div>
+          )}
+          {totalAssets === 0 && (
+            <div className="card p-12 text-center">
+              <p className="text-text-primary font-medium">No positions yet</p>
+              <p className="text-text-muted text-sm mt-1">
+                Head to Settings to add your first investment
+              </p>
             </div>
           )}
         </div>

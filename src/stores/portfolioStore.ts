@@ -10,7 +10,10 @@ interface PortfolioStore {
   setSelectedCategory: (c: AssetCategory | null) => void;
   updatePrices: (prices: Record<string, PriceData>) => void;
   addAsset: (a: Omit<Asset, 'id' | 'currentPrice'>) => void;
+  updateAsset: (id: string, patch: Partial<Omit<Asset, 'id' | 'currentPrice'>>) => void;
   removeAsset: (id: string) => void;
+  resetToDefaults: () => void;
+  clearAll: () => void;
   getTotalValue: () => number;
   getTotalInvested: () => number;
   getPnL: () => { amount: number; percentage: number };
@@ -48,11 +51,23 @@ export const usePortfolioStore = create<PortfolioStore>()(
 
       addAsset: (a) =>
         set((s) => ({
-          assets: [...s.assets, { ...a, id: crypto.randomUUID(), currentPrice: a.avgPrice }],
+          assets: [
+            ...s.assets,
+            { ...a, id: crypto.randomUUID(), currentPrice: a.avgPrice },
+          ],
+        })),
+
+      updateAsset: (id, patch) =>
+        set((s) => ({
+          assets: s.assets.map((a) => (a.id === id ? { ...a, ...patch } : a)),
         })),
 
       removeAsset: (id) =>
         set((s) => ({ assets: s.assets.filter((a) => a.id !== id) })),
+
+      resetToDefaults: () => set({ assets: INITIAL_ASSETS, prices: {}, lastUpdated: null }),
+
+      clearAll: () => set({ assets: [], prices: {}, lastUpdated: null }),
 
       getTotalValue: () =>
         get().assets.reduce((sum, a) => sum + a.currentPrice * a.quantity, 0),

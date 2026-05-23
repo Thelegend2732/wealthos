@@ -18,34 +18,32 @@ export function AllocationChart({ breakdown, totalValue }: Props) {
     color: CATEGORY_COLORS[c],
   }));
 
-  // Donut chart geometry
-  const size = 180;
-  const radius = 72;
-  const strokeWidth = 28;
+  // Thin, refined donut
+  const size = 160;
+  const radius = 70;
+  const strokeWidth = 10; // thin & modern
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
+  const gap = 2; // visual breathing room between segments
   let offset = 0;
 
   return (
-    <section className="card p-6 animate-slide-up" style={{ animationDelay: '60ms' }}>
-      <h3 className="text-xs uppercase tracking-[0.15em] text-text-secondary font-semibold mb-5">
-        Allocation
-      </h3>
-      <div className="flex items-center gap-6 sm:gap-8">
+    <section className="card p-8 animate-slide-up" style={{ animationDelay: '60ms' }}>
+      <p className="overline">Allocation</p>
+      <div className="flex items-center gap-8 mt-6">
         <div className="relative shrink-0">
           <svg width={size} height={size} className="-rotate-90">
-            {/* Background ring */}
             <circle
               cx={center}
               cy={center}
               r={radius}
               fill="none"
-              stroke="#1E1E2E"
+              stroke="rgba(148, 163, 184, 0.06)"
               strokeWidth={strokeWidth}
             />
             {segments.map((s) => {
-              const length = (s.pct / 100) * circumference;
-              const dasharray = `${length} ${circumference}`;
+              const length = (s.pct / 100) * circumference - gap;
+              const dasharray = `${Math.max(length, 0.1)} ${circumference}`;
               const el = (
                 <circle
                   key={s.cat}
@@ -57,39 +55,42 @@ export function AllocationChart({ breakdown, totalValue }: Props) {
                   strokeWidth={strokeWidth}
                   strokeDasharray={dasharray}
                   strokeDashoffset={-offset}
-                  strokeLinecap="butt"
-                  style={{ transition: 'stroke-dasharray 0.8s ease-out' }}
+                  strokeLinecap="round"
+                  style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.16, 1, 0.3, 1)' }}
                 />
               );
-              offset += length;
+              offset += (s.pct / 100) * circumference;
               return el;
             })}
           </svg>
-          {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-bold tabular leading-none">{segments.length}</span>
-            <span className="text-[10px] text-text-secondary uppercase tracking-wider mt-1">
+            <span className="text-3xl font-semibold tabular text-text-primary tracking-tight-2">
+              {segments.length}
+            </span>
+            <span className="text-[10px] uppercase tracking-overline text-text-muted mt-0.5">
               types
             </span>
           </div>
         </div>
 
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-4">
           {ORDER.map((cat) => {
             const value = breakdown[cat];
             if (value === 0) return null;
             const pct = (value / totalValue) * 100;
             const color = CATEGORY_COLORS[cat];
             return (
-              <div key={cat} className="flex items-center gap-3">
-                <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}80` }}
-                />
-                <span className="text-sm text-text-primary font-medium flex-1 truncate">
-                  {CATEGORY_LABELS[cat]}
-                </span>
-                <span className="text-sm font-bold tabular" style={{ color }}>
+              <div key={cat} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-sm text-text-secondary truncate">
+                    {CATEGORY_LABELS[cat]}
+                  </span>
+                </div>
+                <span className="text-sm font-medium tabular text-text-primary">
                   {pct.toFixed(1)}%
                 </span>
               </div>

@@ -1,21 +1,17 @@
 import type { AssetCategory } from '../types';
 
+// Cohesive muted category palette — none of these clash with
+// emerald (positive P&L) or soft red (negative P&L)
 export const CATEGORY_COLORS: Record<AssetCategory, string> = {
-  'index-fund': '#6C63FF',
-  etf: '#00D4AA',
-  stock: '#FF8C42',
+  'index-fund': '#A78BFA', // violet-400
+  etf: '#22D3EE',          // cyan-400
+  stock: '#FBBF24',        // amber-400
 };
 
 export const CATEGORY_LABELS: Record<AssetCategory, string> = {
   'index-fund': 'Index Funds',
   etf: 'ETFs',
   stock: 'Stocks',
-};
-
-export const CATEGORY_GRADIENTS: Record<AssetCategory, string> = {
-  'index-fund': 'from-[#6C63FF] to-[#8B83FF]',
-  etf: 'from-[#00D4AA] to-[#26E5BD]',
-  stock: 'from-[#FF8C42] to-[#FFA666]',
 };
 
 export function formatCurrency(value: number, currency: 'USD' | 'EUR' = 'USD'): string {
@@ -46,9 +42,9 @@ export function relativeTime(date: Date): string {
   const m = Math.floor(diff / 60000);
   const h = Math.floor(diff / 3600000);
   const d = Math.floor(diff / 86400000);
-  if (m < 1) return 'Just now';
+  if (m < 1) return 'just now';
   if (m < 60) return `${m}m ago`;
   if (h < 24) return `${h}h ago`;
-  if (d === 1) return 'Yesterday';
+  if (d === 1) return 'yesterday';
   return `${d}d ago`;
 }

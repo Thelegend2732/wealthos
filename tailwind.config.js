@@ -4,48 +4,83 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0A0A0F',
-        'bg-elevated': '#0E0E1A',
-        surface: '#13131A',
-        'surface-elevated': '#1A1A24',
-        border: '#1E1E2E',
-        'border-strong': '#2A2A38',
-        primary: { DEFAULT: '#6C63FF', light: '#8B83FF', dark: '#5048D9' },
-        success: { DEFAULT: '#00D4AA', light: '#26E5BD' },
-        danger: { DEFAULT: '#FF4757', light: '#FF6B7A' },
-        accent: { DEFAULT: '#FF8C42', light: '#FFA666' },
+        // Background hierarchy — slate-tinted dark grays, never pure black
+        bg: '#0B0F1A',
+        'bg-elevated': '#0F1424',
+        surface: '#111827',
+        'surface-elevated': '#161E2E',
+        'surface-hover': '#1A2335',
+
+        // Borders — semi-transparent for subtlety
+        border: 'rgba(148, 163, 184, 0.08)',
+        'border-strong': 'rgba(148, 163, 184, 0.16)',
+        'border-active': 'rgba(148, 163, 184, 0.24)',
+
+        // Text — slate scale
         text: {
-          primary: '#FFFFFF',
-          secondary: '#8B8FA8',
-          muted: '#4A4A6A',
+          primary: '#F8FAFC',
+          secondary: '#94A3B8',
+          muted: '#64748B',
+          faint: '#475569',
+        },
+
+        // Single accent — refined indigo (replaces the bright purple)
+        primary: {
+          DEFAULT: '#818CF8',
+          hover: '#6366F1',
+          subtle: 'rgba(129, 140, 248, 0.12)',
+        },
+
+        // P&L semantics — emerald for positive, soft red for negative
+        success: {
+          DEFAULT: '#10B981',
+          subtle: 'rgba(16, 185, 129, 0.12)',
+          text: '#34D399',
+        },
+        danger: {
+          DEFAULT: '#F87171',
+          subtle: 'rgba(248, 113, 113, 0.12)',
+          text: '#FCA5A5',
+        },
+
+        // Category palette — cohesive muted hues that don't conflict
+        // with the P&L semantics (emerald/red are reserved)
+        cat: {
+          'index-fund': '#A78BFA',
+          etf: '#22D3EE',
+          stock: '#FBBF24',
         },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'SF Mono', 'monospace'],
       },
+      fontSize: {
+        // Custom display sizes for financial numbers
+        'display-xl': ['3.5rem', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '600' }],
+        'display-lg': ['2.5rem', { lineHeight: '1.05', letterSpacing: '-0.025em', fontWeight: '600' }],
+        'display-md': ['1.75rem', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '600' }],
+      },
+      letterSpacing: {
+        'tight-2': '-0.02em',
+        'tight-3': '-0.03em',
+        'overline': '0.12em',
+      },
       animation: {
-        'fade-in': 'fadeIn 0.4s ease-out',
+        'fade-in': 'fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
         'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'shimmer': 'shimmer 1.6s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
         slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        pulseSoft: { '0%, 100%': { opacity: '0.4' }, '50%': { opacity: '0.7' } },
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
-      },
-      boxShadow: {
-        'glow-primary': '0 0 32px -8px rgba(108, 99, 255, 0.4)',
-        'glow-success': '0 0 32px -8px rgba(0, 212, 170, 0.4)',
-        'card': '0 1px 0 0 rgba(255,255,255,0.04) inset, 0 8px 24px -8px rgba(0,0,0,0.6)',
       },
     },
   },

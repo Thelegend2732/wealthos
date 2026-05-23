@@ -66,8 +66,8 @@ export function DCAPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="DCA Planner" subtitle="Dollar-Cost Averaging Tracker" />
+    <div className="space-y-6">
+      <PageHeader title="DCA Planner" subtitle="Compound interest projections" />
 
       <ContributionForm
         initialCapital={config.initialCapital}
@@ -91,43 +91,49 @@ export function DCAPage() {
       />
 
       {/* Contribution log */}
-      <section className="space-y-3 animate-slide-up" style={{ animationDelay: '180ms' }}>
-        <div className="flex items-center justify-between">
+      <section className="card p-8 animate-slide-up" style={{ animationDelay: '180ms' }}>
+        <div className="flex items-start justify-between mb-6">
           <div>
-            <h2 className="text-base font-bold text-text-primary">Contribution Log</h2>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Total recorded: <span className="tabular text-text-primary font-semibold">
+            <p className="overline">Contribution Log</p>
+            <p className="text-sm text-text-secondary mt-2">
+              Total recorded:{' '}
+              <span className="tabular text-text-primary font-medium">
                 {formatCompact(getTotalContributed(), currency)}
               </span>
             </p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-light text-white text-sm font-bold flex items-center gap-1.5 hover:shadow-glow-primary transition-shadow"
+            className="h-9 px-4 rounded-lg bg-text-primary text-bg font-medium text-sm hover:bg-text-secondary transition-colors flex items-center gap-2"
           >
-            <span className="text-base leading-none">+</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
             Add
           </button>
         </div>
 
         {contributions.length === 0 ? (
-          <div className="card p-10 text-center border-dashed">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-text-primary font-semibold">No contributions logged yet</p>
-            <p className="text-sm text-text-muted mt-1">Tap "Add" to record a real investment</p>
+          <div className="py-12 text-center border border-dashed border-border rounded-xl">
+            <p className="text-text-primary font-medium text-sm">No contributions logged yet</p>
+            <p className="text-xs text-text-muted mt-1">
+              Tap "Add" to record a real investment
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y divide-border">
             {contributions.map((c) => (
-              <div key={c.id} className="card p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-success font-bold tabular">
+              <div key={c.id} className="py-4 flex items-center justify-between gap-4 group">
+                <div className="min-w-0">
+                  <p className="text-success-text font-medium tabular">
                     {formatCurrency(c.amount, currency)}
                   </p>
-                  {c.note && <p className="text-sm text-text-secondary mt-0.5">{c.note}</p>}
+                  {c.note && (
+                    <p className="text-xs text-text-muted mt-0.5 truncate">{c.note}</p>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-text-muted tabular">
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs text-text-muted tabular">
                     {new Date(c.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -136,10 +142,12 @@ export function DCAPage() {
                   </span>
                   <button
                     onClick={() => removeContribution(c.id)}
-                    className="text-text-muted hover:text-danger transition-colors w-7 h-7 rounded-md hover:bg-danger/10 flex items-center justify-center"
+                    className="icon-btn opacity-0 group-hover:opacity-100 hover:!text-danger-text"
                     aria-label="Delete contribution"
                   >
-                    ×
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -151,29 +159,28 @@ export function DCAPage() {
       {/* Add Modal */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in"
           onClick={() => setShowModal(false)}
         >
           <div
-            className="glass rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 space-y-4 animate-slide-up"
+            className="bg-surface border border-border rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-8 space-y-6 animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-text-primary">Add Contribution</h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="w-9 h-9 rounded-full hover:bg-border flex items-center justify-center text-text-secondary text-xl transition-colors"
-              >
-                ×
+              <h3 className="text-xl font-semibold text-text-primary tracking-tight-2">
+                Add Contribution
+              </h3>
+              <button onClick={() => setShowModal(false)} className="icon-btn" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary font-semibold mb-2">
-                Amount ({currency})
-              </label>
-              <div className="flex items-center gap-2 bg-bg border border-border focus-within:border-primary rounded-xl px-4 h-14 transition-colors">
-                <span className="text-text-secondary font-semibold text-lg">
+              <label className="overline">Amount</label>
+              <div className="flex items-baseline gap-2 mt-2 border-b border-border focus-within:border-border-strong pb-2 transition-colors">
+                <span className="text-text-muted text-xl font-medium">
                   {currency === 'USD' ? '$' : '€'}
                 </span>
                 <input
@@ -181,30 +188,28 @@ export function DCAPage() {
                   autoFocus
                   value={modalAmount}
                   onChange={(e) => setModalAmount(e.target.value)}
-                  className="flex-1 bg-transparent outline-none text-text-primary font-bold text-2xl tabular placeholder:text-text-muted"
                   placeholder="0.00"
+                  className="flex-1 bg-transparent outline-none text-text-primary font-semibold text-3xl tabular tracking-tight-2 placeholder:text-text-faint"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary font-semibold mb-2">
-                Note (optional)
-              </label>
+              <label className="overline">Note</label>
               <input
                 type="text"
                 value={modalNote}
                 onChange={(e) => setModalNote(e.target.value)}
                 placeholder="e.g. January DCA"
-                className="w-full bg-bg border border-border focus:border-primary rounded-xl px-4 h-12 outline-none text-text-primary placeholder:text-text-muted transition-colors"
+                className="w-full mt-2 bg-transparent border-b border-border focus:border-border-strong outline-none text-text-primary py-2 transition-colors placeholder:text-text-faint"
               />
             </div>
 
             <button
               onClick={handleAdd}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary-light text-white font-bold hover:shadow-glow-primary transition-shadow"
+              className="w-full h-11 rounded-lg bg-text-primary text-bg font-medium text-sm hover:bg-text-secondary transition-colors"
             >
-              Save Contribution
+              Save contribution
             </button>
           </div>
         </div>
