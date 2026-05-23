@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Home, BarChart2, PlusCircle, Bell, User, ChevronRight, Zap } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { TrendingUp, TrendingDown, Home, BarChart2, PlusCircle, Bell, User, ChevronRight } from "lucide-react";
 
 const positions = [
   { id: 1, name: "S&P 500", ticker: "SPY", type: "ETF", value: 42180, cost: 36200, color: "#10b981", icon: "📈", weight: 28 },
@@ -142,82 +143,10 @@ function PositionCard({ pos, delay }: { pos: Position; delay: number }) {
   );
 }
 
-function WealthSimulator() {
-  const [monthly, setMonthly] = useState(500);
-  const [years, setYears] = useState(10);
-  const rate = 0.09;
-  const months = years * 12;
-  const future = monthly * ((Math.pow(1 + rate / 12, months) - 1) / (rate / 12));
-  const invested = monthly * months;
-
-  return (
-    <div style={{
-      background: "rgba(99,102,241,0.07)",
-      border: "1px solid rgba(99,102,241,0.2)",
-      borderRadius: 20,
-      padding: 20,
-      margin: "20px 0",
-      backdropFilter: "blur(16px)",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <Zap size={16} color="#6366f1" />
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6366f1" }}>
-          Simulador de Riqueza
-        </span>
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Aportación mensual</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>
-            {monthly.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
-          </span>
-        </div>
-        <input type="range" min={100} max={3000} step={50} value={monthly}
-          onChange={e => setMonthly(+e.target.value)}
-          style={{ width: "100%", accentColor: "#6366f1", cursor: "pointer" }}
-        />
-      </div>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Horizonte temporal</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#a78bfa" }}>{years} años</span>
-        </div>
-        <input type="range" min={1} max={35} step={1} value={years}
-          onChange={e => setYears(+e.target.value)}
-          style={{ width: "100%", accentColor: "#6366f1", cursor: "pointer" }}
-        />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Capital invertido</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#e2e8f0" }}>
-            {invested.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
-          </div>
-        </div>
-        <div style={{
-          background: "rgba(99,102,241,0.15)",
-          border: "1px solid rgba(99,102,241,0.3)",
-          borderRadius: 12, padding: "12px 14px",
-          boxShadow: "0 0 20px rgba(99,102,241,0.15)",
-        }}>
-          <div style={{ fontSize: 11, color: "#818cf8", marginBottom: 4 }}>Capital proyectado</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#a78bfa" }}>
-            {future.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
-          </div>
-        </div>
-      </div>
-      <div style={{ marginTop: 12, textAlign: "center" }}>
-        <span style={{ fontSize: 11, color: "#6366f1" }}>
-          ✦ Rentabilidad anual asumida: 9% (histórico S&P 500)
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function PortfolioPage() {
   const animatedTotal = useCountUp(totalValue);
-  const [activeTab, setActiveTab] = useState("home");
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   return (
     <div style={{
@@ -337,10 +266,6 @@ export function PortfolioPage() {
           ))}
         </div>
 
-        {/* Simulator */}
-        <div style={{ padding: "0 20px", animation: "slideIn 0.4s 0.55s both" }}>
-          <WealthSimulator />
-        </div>
       </div>
 
       {/* Bottom Nav */}
@@ -363,15 +288,14 @@ export function PortfolioPage() {
         boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.05) inset",
       }}>
         {[
-          { icon: Home, label: "Inicio", id: "home" },
-          { icon: BarChart2, label: "Mercado", id: "market" },
-          { icon: PlusCircle, label: "Añadir", id: "add" },
-          { icon: Bell, label: "Alertas", id: "alerts" },
-          { icon: User, label: "Perfil", id: "profile" },
-        ].map(({ icon: Icon, label, id }) => {
-          const active = activeTab === id;
+          { icon: Home, label: "Inicio", route: "/" },
+          { icon: BarChart2, label: "Mercado", route: "/news" },
+          { icon: PlusCircle, label: "Añadir", route: "/dca" },
+          { icon: User, label: "Perfil", route: "/settings" },
+        ].map(({ icon: Icon, label, route }) => {
+          const active = pathname === route;
           return (
-            <button key={id} onClick={() => setActiveTab(id)}
+            <button key={route} onClick={() => navigate(route)}
               style={{
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 background: active ? "rgba(16,185,129,0.12)" : "transparent",
