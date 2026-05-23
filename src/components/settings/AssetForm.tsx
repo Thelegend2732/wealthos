@@ -56,175 +56,262 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in"
-      onClick={onClose}
-    >
+    <>
+      <style>{`
+        .af-input {
+          width: 100%;
+          background: rgba(255,255,255,0.05);
+          border: 1.5px solid rgba(255,255,255,0.08);
+          border-radius: 14px;
+          padding: 14px 16px;
+          color: #F8FAFC;
+          font-size: 16px;
+          font-weight: 500;
+          outline: none;
+          transition: border-color 200ms, background 200ms;
+          box-sizing: border-box;
+        }
+        .af-input:focus {
+          border-color: rgba(16,185,129,0.5);
+          background: rgba(16,185,129,0.04);
+        }
+        .af-input::placeholder {
+          color: #334155;
+          font-weight: 400;
+        }
+        .af-input[type=number]::-webkit-inner-spin-button,
+        .af-input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+        }
+      `}</style>
+
       <div
-        className="bg-surface border border-border rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg flex flex-col animate-slide-up"
-        style={{ maxHeight: '90dvh' }}
-        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          background: 'rgba(0,0,0,0.80)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'flex-end',
+          animation: 'slideIn 0.2s both',
+        }}
+        onClick={onClose}
       >
-        {/* Fixed header — never scrolls away */}
-        <div className="flex items-center justify-between px-8 pt-8 pb-4 shrink-0">
-          <h3 className="text-xl font-semibold text-text-primary tracking-tight-2">
-            {asset ? 'Editar posición' : 'Nueva posición'}
-          </h3>
-          <button onClick={onClose} className="icon-btn" aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable form body */}
-        <div className="overflow-y-auto flex-1 px-8 pb-10 space-y-5" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="grid grid-cols-2 gap-5">
-            <FormField label="Símbolo" hint="Ticker (ej. NVDA)">
-              <input
-                type="text"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                placeholder="NVDA"
-                className="input"
-                autoFocus
-                maxLength={8}
-              />
-            </FormField>
-            <FormField label="Divisa">
-              <div className="flex gap-1 bg-bg rounded-lg p-1 border border-border">
-                {CURRENCIES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setCurrency(c)}
-                    className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      currency === c
-                        ? 'bg-surface-elevated text-text-primary'
-                        : 'text-text-muted hover:text-text-secondary'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </FormField>
+        <div
+          style={{
+            width: '100%', maxWidth: 480, margin: '0 auto',
+            maxHeight: '92dvh',
+            background: 'linear-gradient(180deg, #141c2e 0%, #0d1520 100%)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            borderRadius: '28px 28px 0 0',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+            animation: 'slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Handle bar */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0 0' }}>
+            <div style={{ width: 40, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.18)' }} />
           </div>
 
-          <FormField label="Nombre" hint="Nombre completo del activo">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="NVIDIA Corporation"
-              className="input"
-            />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-5">
-            <FormField label="Cantidad" hint="Acciones en cartera">
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="0"
-                className="input tabular"
-                step="any"
-                min="0"
-              />
-            </FormField>
-            <FormField label="Precio medio" hint={`Por acción (${currency})`}>
-              <input
-                type="number"
-                value={avgPrice}
-                onChange={(e) => setAvgPrice(e.target.value)}
-                placeholder="0.00"
-                className="input tabular"
-                step="any"
-                min="0"
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Categoría">
-            <div className="flex gap-2">
-              {CATEGORIES.map((c) => {
-                const isActive = category === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCategory(c)}
-                    className={`flex-1 py-3 px-3 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-                      isActive
-                        ? 'border-border-active bg-surface-elevated text-text-primary'
-                        : 'border-border text-text-secondary hover:border-border-strong'
-                    }`}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[c] }} />
-                    {CATEGORY_LABELS[c]}
-                  </button>
-                );
-              })}
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px 12px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.025em' }}>
+                {asset ? 'Editar posición' : 'Nueva posición'}
+              </h3>
+              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>
+                {asset ? 'Modifica los datos de tu activo' : 'Añade un activo a tu cartera'}
+              </p>
             </div>
-          </FormField>
-
-          {/* Action buttons — inside scroll area so they're always reachable */}
-          <div className="flex gap-3 pt-4">
             <button
               onClick={onClose}
-              className="flex-1 h-11 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-border-strong font-medium text-sm transition-colors"
+              style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0,
+              }}
             >
-              Cancelar
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
             </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 h-11 rounded-lg bg-text-primary text-bg font-medium text-sm hover:bg-text-secondary transition-colors"
-            >
-              {asset ? 'Guardar cambios' : 'Añadir posición'}
-            </button>
+          </div>
+
+          {/* Scrollable form body */}
+          <div style={{
+            overflowY: 'auto', flex: 1, padding: '8px 24px 32px',
+            WebkitOverflowScrolling: 'touch',
+          }}>
+            {/* Row 1: Symbol + Currency */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <Label text="Símbolo" hint="Ticker" />
+                <input
+                  type="text"
+                  value={symbol}
+                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                  placeholder="NVDA"
+                  className="af-input"
+                  autoFocus
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <Label text="Divisa" />
+                <div style={{
+                  display: 'flex', gap: 6,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1.5px solid rgba(255,255,255,0.08)',
+                  borderRadius: 14, padding: 5,
+                }}>
+                  {CURRENCIES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCurrency(c)}
+                      style={{
+                        flex: 1, padding: '9px 0', borderRadius: 10,
+                        background: currency === c ? 'rgba(16,185,129,0.15)' : 'transparent',
+                        border: currency === c ? '1px solid rgba(16,185,129,0.35)' : '1px solid transparent',
+                        color: currency === c ? '#10b981' : '#64748b',
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        transition: 'all 0.18s',
+                      }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Name */}
+            <div style={{ marginBottom: 14 }}>
+              <Label text="Nombre completo" hint="Nombre del activo" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="NVIDIA Corporation"
+                className="af-input"
+              />
+            </div>
+
+            {/* Row 2: Quantity + Avg Price */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <Label text="Cantidad" hint="Acciones" />
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="0"
+                  className="af-input"
+                  step="any"
+                  min="0"
+                />
+              </div>
+              <div>
+                <Label text="Precio medio" hint={`Por acción (${currency})`} />
+                <input
+                  type="number"
+                  value={avgPrice}
+                  onChange={(e) => setAvgPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="af-input"
+                  step="any"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            {/* Category */}
+            <div style={{ marginBottom: 28 }}>
+              <Label text="Categoría" />
+              <div style={{ display: 'flex', gap: 8 }}>
+                {CATEGORIES.map((c) => {
+                  const isActive = category === c;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setCategory(c)}
+                      style={{
+                        flex: 1, padding: '12px 8px', borderRadius: 14,
+                        background: isActive ? 'rgba(16,185,129,0.10)' : 'rgba(255,255,255,0.03)',
+                        border: isActive ? '1.5px solid rgba(16,185,129,0.40)' : '1.5px solid rgba(255,255,255,0.07)',
+                        color: isActive ? '#e2fef4' : '#64748b',
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                        transition: 'all 0.18s',
+                      }}
+                    >
+                      <span style={{
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: CATEGORY_COLORS[c],
+                        display: 'block',
+                        boxShadow: isActive ? `0 0 8px ${CATEGORY_COLORS[c]}80` : 'none',
+                      }} />
+                      {CATEGORY_LABELS[c]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Cancel + Save */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 32 }}>
+              <button
+                onClick={handleSave}
+                style={{
+                  width: '100%', padding: '18px 0',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  border: 'none', borderRadius: 20,
+                  color: '#fff', fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em',
+                  cursor: 'pointer', transition: 'opacity 0.18s',
+                  boxShadow: '0 8px 24px rgba(16,185,129,0.30)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {asset ? 'Guardar cambios' : 'Guardar posición'}
+              </button>
+              <button
+                onClick={onClose}
+                style={{
+                  width: '100%', padding: '15px 0',
+                  background: 'transparent',
+                  border: '1.5px solid rgba(255,255,255,0.10)', borderRadius: 20,
+                  color: '#64748b', fontSize: 15, fontWeight: 500,
+                  cursor: 'pointer', transition: 'border-color 0.18s, color 0.18s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)';
+                  e.currentTarget.style.color = '#94a3b8';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)';
+                  e.currentTarget.style.color = '#64748b';
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       </div>
-
-      <style>{`
-        .input {
-          width: 100%;
-          background: transparent;
-          border: none;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-          padding: 8px 0;
-          color: #F8FAFC;
-          font-size: 15px;
-          font-weight: 500;
-          outline: none;
-          transition: border-color 200ms;
-        }
-        .input:focus {
-          border-color: rgba(148, 163, 184, 0.32);
-        }
-        .input::placeholder {
-          color: #475569;
-        }
-      `}</style>
-    </div>
+    </>
   );
 }
 
-function FormField({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+function Label({ text, hint }: { text: string; hint?: string }) {
   return (
-    <div>
-      <div className="flex items-baseline justify-between mb-2">
-        <label className="overline">{label}</label>
-        {hint && <span className="text-[10px] text-text-faint">{hint}</span>}
-      </div>
-      {children}
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#475569' }}>
+        {text}
+      </span>
+      {hint && <span style={{ fontSize: 10, color: '#334155' }}>{hint}</span>}
     </div>
   );
 }

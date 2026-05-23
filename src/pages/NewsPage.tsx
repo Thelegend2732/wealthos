@@ -73,10 +73,10 @@ export function NewsPage() {
         <div
           onClick={handleClose}
           style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            background: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            position: 'fixed', inset: 0, zIndex: 999,
+            background: 'rgba(0,0,0,0.80)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
             display: 'flex', alignItems: 'flex-end',
             animation: 'slideIn 0.2s both',
           }}
@@ -87,7 +87,7 @@ export function NewsPage() {
               width: '100%',
               maxWidth: 430,
               margin: '0 auto',
-              maxHeight: '88vh',
+              maxHeight: '88dvh',
               background: 'linear-gradient(180deg, #111827 0%, #0a0f1e 100%)',
               border: '1px solid rgba(255,255,255,0.10)',
               borderRadius: '24px 24px 0 0',
@@ -98,12 +98,12 @@ export function NewsPage() {
             }}
           >
             {/* Handle bar */}
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
               <div style={{ width: 36, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.15)' }} />
             </div>
 
             {/* Close button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0', flexShrink: 0 }}>
               <button
                 onClick={handleClose}
                 style={{
@@ -119,7 +119,11 @@ export function NewsPage() {
             </div>
 
             {/* Scrollable content */}
-            <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px 32px' }}>
+            <div style={{
+              overflowY: 'auto', flex: 1,
+              padding: '12px 20px 96px',
+              WebkitOverflowScrolling: 'touch',
+            }}>
               {/* Hero image */}
               {selectedArticle.imageUrl && (
                 <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 180 }}>

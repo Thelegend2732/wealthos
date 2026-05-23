@@ -51,8 +51,9 @@ export function Layout() {
         overflowY: 'auto',
         overflowX: 'hidden',
         position: 'relative',
-        zIndex: 1,
-        WebkitOverflowScrolling: 'touch',
+        /* No zIndex here: assigning zIndex:1 would create a stacking context
+           that traps fixed-position modals below the nav's z-10 layer. */
+        WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'],
         paddingBottom: 110,
       }}>
         <div style={{ maxWidth: 430, margin: '0 auto' }}>
