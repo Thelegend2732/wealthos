@@ -138,7 +138,7 @@ function syntheticFor(symbol: string): AnalysisData {
 
   return {
     symbol: sym,
-    currency: 'USD',
+    currency: 'EUR',
     value:    valueScore,
     future:   futureScore,
     past:     pastScore,

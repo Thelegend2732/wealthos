@@ -523,25 +523,26 @@ function ratingColor(rating: AnalystRating): { fg: string; bg: string; border: s
   }
 }
 
-function formatMoney(amount: number, currency: string, fractionDigits = 2): string {
-  try {
-    return new Intl.NumberFormat(currency === 'EUR' ? 'de-DE' : 'en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(fractionDigits)} ${currency}`;
-  }
+/**
+ * WealthOS enforces a single-currency UX (EUR). Both helpers ignore the
+ * legacy `currency` argument so any stale callers that still pass "USD"
+ * still render in euros — there is no path that can produce a "$" in the
+ * Analysis tab.
+ */
+function formatMoney(amount: number, _currency: string = 'EUR', fractionDigits = 2): string {
+  void _currency;
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(amount);
 }
 
-/** Display amounts already expressed in $B (billions) compactly,
-    e.g. 184.2 → "$184.2B" / "€18.4B". */
-function formatBillions(amountBillions: number, currency: string): string {
-  const symbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '';
-  const formatted = amountBillions.toFixed(1);
-  return symbol ? `${symbol}${formatted}B` : `${formatted}B ${currency}`;
+/** Billions formatter, always in EUR ("€184.2B"). */
+function formatBillions(amountBillions: number, _currency: string = 'EUR'): string {
+  void _currency;
+  return `€${amountBillions.toFixed(1)}B`;
 }
 
 function ConsensusSection({
