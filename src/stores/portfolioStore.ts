@@ -132,7 +132,16 @@ export const usePortfolioStore = create<PortfolioStore>()(
     }),
     {
       name: 'wealthos-portfolio',
-      partialize: (s) => ({ assets: s.assets }),
+      // Persist assets AND last-known prices so a cold reload immediately
+      // shows the most recent PnL the user saw — no zero-flash while the
+      // Yahoo refetch is in flight. PnL stays correct because both fields
+      // are restored together.
+      partialize: (s) => ({
+        assets: s.assets,
+        prices: s.prices,
+        lastUpdated: s.lastUpdated,
+      }),
+      version: 2,
     }
   )
 );

@@ -144,12 +144,16 @@ export function PortfolioPage() {
   const { rates, refresh: refetchFx } = useEurFx();
   const qc = useQueryClient();
 
-  // EUR-converted figures. avgPrice is already in €; currentPrice goes
-  // through the FX layer so cross-currency holdings (USD, GBP, JPY, KRW…)
-  // are summed in a single, consistent denomination.
+  // PnL contract — strict, milimétrica, matches the user spec exactly:
+  //   priceEur = toEur(asset.currentPrice, asset.currency, rates)
+  //   pnl%     = ((priceEur - avgPrice) / avgPrice) * 100
+  // Per-position pct equals (value - cost) / cost * 100 because the quantity
+  // cancels out — verified with the canonical case: buy @50€, market @100€
+  //   → priceEur=100, avg=50 → (100-50)/50 * 100 = +100.00%
   const cardData: CardData[] = assets.map((asset, i) => {
-    const value = toEur(asset.currentPrice, asset.currency, rates) * asset.quantity;
-    const cost  = asset.avgPrice * asset.quantity; // already EUR
+    const priceEur = toEur(asset.currentPrice, asset.currency, rates);
+    const value = priceEur * asset.quantity;
+    const cost  = asset.avgPrice * asset.quantity; // avgPrice already EUR
     return {
       asset,
       color: PALETTE[i % PALETTE.length],

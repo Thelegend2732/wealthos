@@ -2,7 +2,10 @@ import type { NewsItem } from '../types';
 
 const NEWS_KEY = (import.meta.env.VITE_NEWS_API_KEY as string) || '';
 const CACHE_PREFIX = 'wealthos:news:';
-const CACHE_TTL = 60 * 60 * 1000;
+// Aggressive 3-minute cache so the feed always reflects the last ~3 min of
+// the wire. Combined with cache-busted URLs + `cache: 'no-store'`, the
+// browser HTTP cache can no longer pin stale headlines for hours.
+const CACHE_TTL = 3 * 60 * 1000;
 const READ_KEY = 'wealthos:news-read';
 
 const QUERIES: Record<NewsItem['category'], string> = {
@@ -79,9 +82,20 @@ async function fetchFromAPI(category: NewsItem['category']): Promise<NewsItem[]>
   if (!NEWS_KEY || NEWS_KEY === 'your_key_here') return mockNews(category);
 
   const q = encodeURIComponent(QUERIES[category]);
-  const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&pageSize=20&language=en&apiKey=${NEWS_KEY}`;
+  // Cache-bust the URL on every call so neither the browser, any CDN, nor
+  // a service worker can serve a previously-fetched copy. The `t` parameter
+  // is ignored by NewsAPI but mutates the URL key.
+  const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&pageSize=20&language=en&apiKey=${NEWS_KEY}&t=${Date.now()}`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        // NewsAPI doesn't read these, but they make our intent explicit and
+        // prevent intermediate caches from interfering.
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    });
     if (!res.ok) throw new Error(`NewsAPI ${res.status}`);
     const json = await res.json();
     if (json.status !== 'ok') throw new Error(json.message ?? 'API error');
@@ -107,7 +121,8 @@ async function fetchFromAPI(category: NewsItem['category']): Promise<NewsItem[]>
       /* ignore */
     }
     return items.map((i) => ({ ...i, isRead: readSet.has(i.id) }));
-  } catch {
+  } catch (err) {
+    console.error(`[news:${category}] fetchFromAPI failed`, err);
     return mockNews(category);
   }
 }

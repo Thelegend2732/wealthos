@@ -2,11 +2,10 @@
  * Yahoo Finance integration (search + spot quotes) plus EUR FX conversion.
  *
  * Yahoo's endpoints don't send CORS headers, so all browser calls go through
- * a configurable proxy. Override the proxy via `VITE_CORS_PROXY` in `.env`
- * (default: api.allorigins.win — free, no key, works from anywhere).
- *
- * If both Yahoo and the proxy fail, callers should treat the result as an
- * empty list / unknown price rather than crashing the UI.
+ * a proxy. We try a chain of free proxies in order; the first that returns
+ * a 200 wins. Override the priority list via `VITE_CORS_PROXY` in `.env`
+ * (comma-separated). All proxy URLs MUST end with the part where the target
+ * URL is appended (e.g. `https://corsproxy.io/?url=`).
  */
 
 import type { AssetCategory } from '../types';
@@ -30,14 +29,15 @@ export interface QuoteData {
   lastUpdated: Date;
 }
 
-const PROXY =
-  (import.meta.env.VITE_CORS_PROXY as string | undefined) ??
-  'https://api.allorigins.win/raw?url=';
-
-function proxied(url: string): string {
-  if (!PROXY) return url;
-  return `${PROXY}${encodeURIComponent(url)}`;
-}
+// Priority list of CORS proxies. corsproxy.io is the primary (most reliable
+// for Yahoo as of mid-2026); allorigins is the fallback. Override via env.
+const ENV_PROXY = (import.meta.env.VITE_CORS_PROXY as string | undefined) || '';
+const PROXIES: string[] = ENV_PROXY
+  ? ENV_PROXY.split(',').map((s) => s.trim()).filter(Boolean)
+  : [
+      'https://corsproxy.io/?url=',
+      'https://api.allorigins.win/raw?url=',
+    ];
 
 function classifyQuoteType(qt?: string): AssetCategory {
   const t = (qt ?? '').toUpperCase();
@@ -47,7 +47,7 @@ function classifyQuoteType(qt?: string): AssetCategory {
 }
 
 const CACHE_PREFIX = 'wealthos:yfquote:';
-const CACHE_TTL = 60 * 1000; // 1 minute — quotes feel "live" but we don't spam
+const CACHE_TTL = 60 * 1000; // 1 minute
 
 interface Cached { data: QuoteData; ts: number; }
 
@@ -74,26 +74,64 @@ function setCachedQuote(symbol: string, data: QuoteData) {
   }
 }
 
-async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json() as Promise<T>;
+/**
+ * Fetches a URL through whichever CORS proxy responds first. Logs the proxy
+ * name and HTTP status on failure so production debugging is possible from
+ * the browser console.
+ */
+async function proxiedFetchJSON<T>(targetUrl: string, label: string): Promise<T> {
+  let lastError: unknown = null;
+  for (const proxy of PROXIES) {
+    const url = `${proxy}${encodeURIComponent(targetUrl)}`;
+    try {
+      const res = await fetch(url, {
+        // Force the BROWSER cache off — proxies sometimes set Cache-Control
+        // headers that pin stale Yahoo responses for hours.
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok) {
+        console.error(`[yahoo:${label}] proxy ${proxy} → HTTP ${res.status}`);
+        lastError = new Error(`HTTP ${res.status}`);
+        continue;
+      }
+      const text = await res.text();
+      try {
+        return JSON.parse(text) as T;
+      } catch (parseErr) {
+        // allorigins sometimes wraps the response — try .contents
+        try {
+          const wrapped = JSON.parse(text) as { contents?: string };
+          if (wrapped.contents) return JSON.parse(wrapped.contents) as T;
+        } catch {
+          /* fallthrough */
+        }
+        console.error(`[yahoo:${label}] proxy ${proxy} → invalid JSON`, parseErr);
+        lastError = parseErr;
+        continue;
+      }
+    } catch (err) {
+      console.error(`[yahoo:${label}] proxy ${proxy} → fetch error`, err);
+      lastError = err;
+    }
+  }
+  throw lastError ?? new Error('All CORS proxies failed');
 }
 
 /**
- * Search the global Yahoo Finance universe. Matches stocks, ETFs, mutual funds
- * and indexes across every exchange Yahoo covers (US, EU, Asia, etc.) — so it
- * happily resolves "Fidelity S&P 500 Index P EUR" or "SK Hynix" as well as
- * plain tickers like "NVDA".
+ * Search the global Yahoo Finance universe. Returns [] on failure — never
+ * throws, so callers can render an empty state instead of crashing.
  */
 export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
   const q = query.trim();
   if (!q) return [];
 
-  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&lang=es-ES&region=ES`;
+  // Cache-bust the underlying Yahoo call so the proxy never serves a stale
+  // result keyed on the URL.
+  const target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&lang=es-ES&region=ES&_=${Date.now()}`;
 
   try {
-    const json = await fetchJSON<{
+    const json = await proxiedFetchJSON<{
       quotes?: Array<{
         symbol: string;
         shortname?: string;
@@ -103,7 +141,7 @@ export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
         exchange?: string;
         currency?: string;
       }>;
-    }>(proxied(url));
+    }>(target, 'search');
 
     const quotes = json.quotes ?? [];
     return quotes
@@ -117,23 +155,23 @@ export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
         quoteType: q.quoteType,
       }))
       .slice(0, 10);
-  } catch {
+  } catch (err) {
+    console.error('[yahoo:search] giving up after all proxies failed', err);
     return [];
   }
 }
 
 /**
- * Fetch a single quote in the asset's NATIVE currency. Conversion to EUR is
- * handled separately by the FX layer so this function stays pure.
+ * Fetch a single quote in the asset's NATIVE currency.
  */
 export async function fetchQuote(symbol: string): Promise<QuoteData | null> {
   const cached = getCachedQuote(symbol);
   if (cached) return cached;
 
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d&_=${Date.now()}`;
 
   try {
-    const json = await fetchJSON<{
+    const json = await proxiedFetchJSON<{
       chart?: {
         result?: Array<{
           meta?: {
@@ -146,11 +184,14 @@ export async function fetchQuote(symbol: string): Promise<QuoteData | null> {
         }>;
         error?: unknown;
       };
-    }>(proxied(url));
+    }>(target, `quote:${symbol}`);
 
     const r = json.chart?.result?.[0];
     const m = r?.meta;
-    if (!m || typeof m.regularMarketPrice !== 'number') return null;
+    if (!m || typeof m.regularMarketPrice !== 'number') {
+      console.error(`[yahoo:quote:${symbol}] no regularMarketPrice in payload`, json);
+      return null;
+    }
 
     const price = m.regularMarketPrice;
     const prev = m.chartPreviousClose ?? m.previousClose ?? price;
@@ -168,13 +209,12 @@ export async function fetchQuote(symbol: string): Promise<QuoteData | null> {
     };
     setCachedQuote(symbol, data);
     return data;
-  } catch {
+  } catch (err) {
+    console.error(`[yahoo:quote:${symbol}] all proxies failed`, err);
     return null;
   }
 }
 
-/** Fetch many quotes in parallel — Yahoo's chart endpoint doesn't rate-limit
-    aggressively for small batches, so this is safe for typical portfolios. */
 export async function fetchQuotes(
   symbols: string[]
 ): Promise<Record<string, QuoteData>> {
