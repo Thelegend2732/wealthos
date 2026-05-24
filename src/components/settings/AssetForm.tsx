@@ -107,10 +107,19 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
   }, [query, open, match]);
 
   const handleSelect = async (m: SymbolMatch) => {
+    // Commit the selection — and EXPLICITLY clear every piece of search UI
+    // state so no stale error message ("No se encontró…") can linger.
     setMatch(m);
     setQuery(`${m.symbol} — ${m.name}`);
     setCategory(m.category);
+    setResults([]);
     setShowDropdown(false);
+    setSearching(false);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
     setPriceLoading(true);
     try {
       const q = await fetchQuote(m.symbol);
@@ -125,9 +134,13 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
           setAvgPrice(eur.toFixed(2));
         }
       } else {
+        // Quote endpoint failed (likely CORS or rate limit). The selection
+        // is still valid — the user can save and prices will fill in on the
+        // next refetch.
         setLivePrice(null);
       }
-    } catch {
+    } catch (err) {
+      console.error(`[AssetForm] fetchQuote(${m.symbol}) failed`, err);
       setLivePrice(null);
     } finally {
       setPriceLoading(false);
@@ -338,7 +351,12 @@ export function AssetForm({ open, asset, onClose, onSave }: Props) {
                   </div>
                 )}
 
-                {showDropdown && !searching && query.trim().length > 1 && results.length === 0 && (
+                {/* Error only shows when there is NO valid match selected.
+                    Without this guard, after a successful selection the
+                    dropdown briefly re-renders empty before showDropdown
+                    flips to false, leaking the error alongside the green
+                    check chip. */}
+                {!match && showDropdown && !searching && query.trim().length > 1 && results.length === 0 && (
                   <div style={{
                     position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
                     background: 'rgba(20, 28, 46, 0.98)',

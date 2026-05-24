@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useNews } from '../hooks/useNews';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CategoryTabs } from '../components/news/CategoryTabs';
@@ -174,62 +174,59 @@ export function NewsPage() {
                 {selectedArticle.title}
               </h2>
 
-              {/* Description */}
+              {/* Description — always rendered. News APIs return only a
+                  short summary by copyright, so we surface it as-is and
+                  rely on the "Fuente" link below to send users to the
+                  full article. */}
               <p style={{
-                fontSize: 15, color: '#cbd5e1', lineHeight: 1.75, marginBottom: 28,
+                fontSize: 15, color: '#cbd5e1', lineHeight: 1.75, marginBottom: 16,
                 whiteSpace: 'pre-wrap',
               }}>
-                {selectedArticle.description}
+                {selectedArticle.description ||
+                  'Resumen no disponible. Abre el artículo completo en la fuente original para leer la noticia entera.'}
               </p>
 
-              {/* CTA */}
+              <p style={{
+                fontSize: 12, color: '#64748b', fontStyle: 'italic', marginBottom: 28,
+                lineHeight: 1.6,
+              }}>
+                Las APIs de noticias solo devuelven el resumen por motivos de copyright.
+                Pulsa abajo para leer la noticia completa en la fuente original.
+              </p>
+
+              {/* Mandatory emerald source link — always present whenever
+                  the article has a real URL. */}
               {selectedArticle.url && selectedArticle.url !== '#' && (
-                <button
-                  onClick={() => window.open(selectedArticle.url, '_blank', 'noopener,noreferrer')}
+                <a
+                  href={selectedArticle.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    width: '100%', padding: '14px 20px',
-                    background: 'rgba(99,102,241,0.15)',
-                    border: '1px solid rgba(99,102,241,0.35)',
-                    borderRadius: 14, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    fontSize: 14, fontWeight: 600, color: '#a78bfa',
-                    transition: 'background 0.2s', marginBottom: 24,
+                    display: 'block',
+                    width: '100%', padding: '16px 20px',
+                    background: 'rgba(16,185,129,0.12)',
+                    border: '1.5px solid rgba(16,185,129,0.40)',
+                    borderRadius: 16,
+                    textAlign: 'center',
+                    fontSize: 15, fontWeight: 700,
+                    color: '#10b981', letterSpacing: '-0.005em',
+                    textDecoration: 'none',
+                    marginTop: 8, marginBottom: 16,
+                    boxShadow: '0 8px 24px rgba(16,185,129,0.18)',
                   }}
-                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.25)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.15)'}
                 >
-                  <ExternalLink size={15} />
-                  Abrir artículo completo
-                </button>
+                  Fuente: Leer artículo completo aquí &rarr;
+                </a>
               )}
 
-              {/* Source anchor — always present at the end of the article */}
+              {/* Hostname caption for trust/UX (e.g. bloomberg.com) */}
               {selectedArticle.url && selectedArticle.url !== '#' && (
-                <div
-                  style={{
-                    paddingTop: 18,
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
-                    fontSize: 12, color: '#64748b',
-                  }}
-                >
-                  Fuente:{' '}
-                  <a
-                    href={selectedArticle.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: '#a78bfa', textDecoration: 'underline',
-                      textDecorationColor: 'rgba(167,139,250,0.4)',
-                      textUnderlineOffset: 3,
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {selectedArticle.source} — {(() => {
-                      try { return new URL(selectedArticle.url).hostname.replace(/^www\./, ''); }
-                      catch { return 'enlace original'; }
-                    })()}
-                  </a>
-                </div>
+                <p style={{ fontSize: 11, color: '#475569', textAlign: 'center', margin: 0 }}>
+                  {selectedArticle.source} · {(() => {
+                    try { return new URL(selectedArticle.url).hostname.replace(/^www\./, ''); }
+                    catch { return 'enlace original'; }
+                  })()}
+                </p>
               )}
             </div>
           </div>

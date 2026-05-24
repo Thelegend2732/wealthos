@@ -29,14 +29,16 @@ export interface QuoteData {
   lastUpdated: Date;
 }
 
-// Priority list of CORS proxies. corsproxy.io is the primary (most reliable
-// for Yahoo as of mid-2026); allorigins is the fallback. Override via env.
+// Priority list of CORS proxies. api.allorigins.win/raw is the primary —
+// it's the most permissive public proxy for Yahoo's quote and search
+// endpoints and returns the body verbatim (no JSON wrapping). corsproxy.io
+// is kept as a fallback. Override the order via VITE_CORS_PROXY.
 const ENV_PROXY = (import.meta.env.VITE_CORS_PROXY as string | undefined) || '';
 const PROXIES: string[] = ENV_PROXY
   ? ENV_PROXY.split(',').map((s) => s.trim()).filter(Boolean)
   : [
-      'https://corsproxy.io/?url=',
       'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?url=',
     ];
 
 function classifyQuoteType(qt?: string): AssetCategory {
