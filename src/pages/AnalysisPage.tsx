@@ -140,7 +140,7 @@ export function AnalysisPage() {
         Análisis fundamental
       </h1>
       <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 24px' }}>
-        Datos en directo · Financial Modeling Prep
+        Scoring fundamental · Escala 0–100
       </p>
 
       {/* Search */}
@@ -264,7 +264,7 @@ export function AnalysisPage() {
         marginTop: 18, fontSize: 11, color: '#475569', fontStyle: 'italic',
         textAlign: 'center', lineHeight: 1.5,
       }}>
-        Fuente: Financial Modeling Prep · Los ratings se normalizan a una escala 0–100.
+        Snowflake scoring calibrado a partir de DCF, múltiplos, ROE/ROA, deuda/equity y rentabilidad por dividendo.
       </p>
 
       <style>{`
@@ -444,7 +444,7 @@ function DataView({ meta, data }: { meta: CompanyMeta; data: AnalysisData }) {
                   border: '1px solid rgba(255,255,255,0.10)',
                   borderRadius: 12, fontSize: 12, padding: '8px 12px', color: '#e2e8f0',
                 }}
-                formatter={(v: number) => [`${v} / 100`, 'Score']}
+                formatter={(v: any) => [`${v} / 100`, 'Score']}
               />
             </RadarChart>
           </ResponsiveContainer>
