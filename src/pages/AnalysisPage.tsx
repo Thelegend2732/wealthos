@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   ResponsiveContainer,
   Radar,
@@ -9,24 +10,19 @@ import {
   Tooltip,
 } from 'recharts';
 import { searchSymbols, type SymbolMatch } from '../services/yahooFinance';
+import {
+  fetchFundamentalAnalysis,
+  NoFundamentalsError,
+  type FundamentalAnalysis,
+} from '../services/fundamentals';
 
 /**
- * Simply Wall St-inspired fundamental analysis page. Five dimensions are
- * scored 0–100; the radar chart visualises the snowflake, the weighted
- * average forms an aggregate "Snowflake Score", and per-dimension cards
- * explain what each axis means.
- *
- * Data is mocked for now (see MOCK_ANALYSIS) so the design can be iterated
- * before a real fundamentals API is wired in.
+ * Simply Wall St-inspired fundamental analysis page. Real data comes from
+ * Financial Modeling Prep (see services/fundamentals.ts); the five axes are
+ * normalised onto a 0–100 snowflake scale. ETFs and other instruments
+ * without fundamentals trigger a typed NoFundamentalsError, which the UI
+ * surfaces as a friendly empty state.
  */
-
-interface Analysis {
-  value: number;     // Valor: ¿cotiza por debajo de su valor intrínseco?
-  future: number;    // Futuro: ¿se espera crecimiento sostenido?
-  past: number;      // Pasado: ¿calidad del rendimiento histórico?
-  health: number;    // Salud: ¿solvencia y balance financiero?
-  dividend: number;  // Dividendo: ¿política de dividendos y rentabilidad?
-}
 
 interface CompanyMeta {
   symbol: string;
@@ -35,61 +31,32 @@ interface CompanyMeta {
   exchange?: string;
 }
 
-const MOCK_ANALYSIS: Record<string, Analysis> = {
-  NVDA:  { value: 72, future: 85, past: 90, health: 65, dividend: 20 },
-  AAPL:  { value: 55, future: 70, past: 88, health: 90, dividend: 60 },
-  MSFT:  { value: 62, future: 80, past: 85, health: 88, dividend: 55 },
-  ASML:  { value: 48, future: 78, past: 82, health: 75, dividend: 40 },
-  GOOGL: { value: 68, future: 82, past: 80, health: 85, dividend: 25 },
+const DEFAULT_META: CompanyMeta = {
+  symbol: 'NVDA',
+  name: 'NVIDIA Corporation',
+  currency: 'USD',
+  exchange: 'NASDAQ',
 };
-
-const DEFAULT_TICKER = 'NVDA';
-
-const DEFAULT_META: Record<string, CompanyMeta> = {
-  NVDA:  { symbol: 'NVDA',  name: 'NVIDIA Corporation',  currency: 'USD', exchange: 'NASDAQ' },
-  AAPL:  { symbol: 'AAPL',  name: 'Apple Inc.',          currency: 'USD', exchange: 'NASDAQ' },
-  MSFT:  { symbol: 'MSFT',  name: 'Microsoft Corporation', currency: 'USD', exchange: 'NASDAQ' },
-  ASML:  { symbol: 'ASML',  name: 'ASML Holding N.V.',   currency: 'USD', exchange: 'NASDAQ' },
-  GOOGL: { symbol: 'GOOGL', name: 'Alphabet Inc.',       currency: 'USD', exchange: 'NASDAQ' },
-};
-
-/** Deterministic mock for tickers outside the curated table. */
-function mockFor(symbol: string): Analysis {
-  let h = 0;
-  for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) | 0;
-  const r = (offset: number) => {
-    const x = Math.sin(h + offset) * 10000;
-    const f = x - Math.floor(x);
-    return Math.round(30 + f * 60); // 30–90 range
-  };
-  return {
-    value: r(1),
-    future: r(2),
-    past: r(3),
-    health: r(4),
-    dividend: r(5),
-  };
-}
 
 interface Dimension {
-  key: keyof Analysis;
+  key: keyof Pick<FundamentalAnalysis, 'value' | 'future' | 'past' | 'health' | 'dividend'>;
   label: string;
   description: string;
 }
 
 const DIMENSIONS: Dimension[] = [
-  { key: 'value',    label: 'Valor',     description: '¿Cotiza por debajo de su valor intrínseco según múltiplos y flujos descontados?' },
-  { key: 'future',   label: 'Futuro',    description: '¿Se proyecta crecimiento sostenido en ingresos y beneficios?' },
-  { key: 'past',     label: 'Pasado',    description: '¿Qué calidad ha tenido el rendimiento histórico de la compañía?' },
-  { key: 'health',   label: 'Salud',     description: '¿Solvencia, balance limpio y capacidad de afrontar deuda a corto plazo?' },
-  { key: 'dividend', label: 'Dividendo', description: '¿Rentabilidad por dividendo y sostenibilidad de la política de reparto?' },
+  { key: 'value',    label: 'Valor',     description: '¿Cotiza por debajo de su valor intrínseco según DCF y múltiplos?' },
+  { key: 'future',   label: 'Futuro',    description: '¿Se proyecta crecimiento sostenido? (P/E y P/B prospectivos)' },
+  { key: 'past',     label: 'Pasado',    description: '¿Calidad histórica del retorno sobre capital? (ROE + ROA)' },
+  { key: 'health',   label: 'Salud',     description: '¿Solvencia y balance? Basado en ratio deuda/equity.' },
+  { key: 'dividend', label: 'Dividendo', description: '¿Rentabilidad por dividendo sobre el precio actual?' },
 ];
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#10b981'; // emerald — excelente
-  if (score >= 60) return '#84cc16'; // lime — bueno
-  if (score >= 40) return '#f59e0b'; // amber — regular
-  return '#ef4444';                   // red — débil
+  if (score >= 80) return '#10b981';
+  if (score >= 60) return '#84cc16';
+  if (score >= 40) return '#f59e0b';
+  return '#ef4444';
 }
 
 function scoreLabel(score: number): string {
@@ -100,8 +67,7 @@ function scoreLabel(score: number): string {
 }
 
 export function AnalysisPage() {
-  const [meta, setMeta] = useState<CompanyMeta>(DEFAULT_META[DEFAULT_TICKER]);
-  const [analysis, setAnalysis] = useState<Analysis>(MOCK_ANALYSIS[DEFAULT_TICKER]);
+  const [meta, setMeta] = useState<CompanyMeta>(DEFAULT_META);
 
   // Search UI
   const [query, setQuery] = useState('');
@@ -109,6 +75,21 @@ export function AnalysisPage() {
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Real fundamentals via React Query — caching + retries handled automatically.
+  const {
+    data: analysisData,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useQuery<FundamentalAnalysis, Error>({
+    queryKey: ['fundamentals', meta.symbol],
+    queryFn: () => fetchFundamentalAnalysis(meta.symbol),
+    staleTime: 60 * 60 * 1000,   // 1 hour
+    retry: 0,                     // FMP errors are usually deterministic (ETF, missing data)
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (!query.trim()) {
@@ -131,31 +112,20 @@ export function AnalysisPage() {
   }, [query]);
 
   const handleSelect = (m: SymbolMatch) => {
-    const symbol = m.symbol.toUpperCase();
     setMeta({
-      symbol,
+      symbol: m.symbol.toUpperCase(),
       name: m.name,
       currency: m.currency,
       exchange: m.exchange,
     });
-    setAnalysis(MOCK_ANALYSIS[symbol] ?? mockFor(symbol));
     setQuery('');
     setResults([]);
     setShowDropdown(false);
     setSearching(false);
   };
 
-  // Snowflake aggregate — simple unweighted average across the five axes,
-  // matching Simply Wall St's headline "Snowflake Score".
-  const snowflake = Math.round(
-    (analysis.value + analysis.future + analysis.past + analysis.health + analysis.dividend) / 5
-  );
-
-  const radarData = DIMENSIONS.map((d) => ({
-    dimension: d.label,
-    score: analysis[d.key],
-    fullMark: 100,
-  }));
+  const noFundamentals = isError && error instanceof NoFundamentalsError;
+  const loading = isLoading || isFetching;
 
   return (
     <div style={{ padding: '40px 20px 20px', color: '#f1f5f9' }}>
@@ -164,7 +134,7 @@ export function AnalysisPage() {
         Análisis fundamental
       </h1>
       <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 24px' }}>
-        Datos ficticios · Vista previa del diseño
+        Datos en directo · Financial Modeling Prep
       </p>
 
       {/* Search */}
@@ -252,7 +222,7 @@ export function AnalysisPage() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         marginBottom: 16,
       }}>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{
               fontFamily: 'ui-monospace, SF Mono, monospace',
@@ -264,22 +234,192 @@ export function AnalysisPage() {
               {meta.exchange || meta.currency}
             </span>
           </div>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {meta.name}
+          <p style={{
+            margin: '4px 0 0', fontSize: 13, color: '#94a3b8',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {analysisData?.companyName || meta.name}
           </p>
         </div>
+        {analysisData?.rating && !loading && (
+          <div style={{
+            background: 'rgba(16,185,129,0.10)',
+            border: '1px solid rgba(16,185,129,0.30)',
+            borderRadius: 10, padding: '6px 10px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#10b981', lineHeight: 1 }}>
+              {analysisData.rating}
+            </span>
+            <span style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {analysisData.recommendation || 'Rating'}
+            </span>
+          </div>
+        )}
       </div>
 
+      {/* States: loading / error / data */}
+      {loading && <LoadingState />}
+      {!loading && noFundamentals && <NoFundamentalsState />}
+      {!loading && isError && !noFundamentals && (
+        <ErrorState message={error instanceof Error ? error.message : 'Error desconocido'} />
+      )}
+      {!loading && !isError && analysisData && (
+        <DataView meta={meta} data={analysisData} />
+      )}
+
+      {/* Disclaimer */}
+      <p style={{
+        marginTop: 18, fontSize: 11, color: '#475569', fontStyle: 'italic',
+        textAlign: 'center', lineHeight: 1.5,
+      }}>
+        Fuente: Financial Modeling Prep · Los ratings se normalizan a una escala 0–100.
+      </p>
+
+      <style>{`
+        @keyframes wos-fadein {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes wos-pulse-skel {
+          0%, 100% { opacity: 0.5; }
+          50%      { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ─── Sub-components ──────────────────────────────────────────────────── */
+
+function LoadingState() {
+  return (
+    <div
+      style={{
+        animation: 'wos-fadein 0.3s ease',
+        display: 'flex', flexDirection: 'column', gap: 16,
+      }}
+    >
+      {/* Radar skeleton */}
+      <div style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 24, padding: 20,
+        height: 280 + 40,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 14,
+      }}>
+        <div style={{
+          width: 180, height: 180, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
+          border: '1px dashed rgba(16,185,129,0.25)',
+          animation: 'wos-pulse-skel 1.6s ease-in-out infinite',
+        }} />
+        <span style={{ fontSize: 12, color: '#64748b', letterSpacing: '0.02em' }}>
+          Analizando estados financieros y proyecciones…
+        </span>
+      </div>
+
+      {/* Score skeleton */}
+      <Skeleton height={76} />
+
+      {/* Cards skeleton */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} height={120} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Skeleton({ height }: { height: number }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 16, height,
+      animation: 'wos-pulse-skel 1.6s ease-in-out infinite',
+    }} />
+  );
+}
+
+function NoFundamentalsState() {
+  return (
+    <div style={{
+      animation: 'wos-fadein 0.35s ease',
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 20, padding: '40px 24px',
+      textAlign: 'center',
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        background: 'rgba(245,158,11,0.10)',
+        border: '1px solid rgba(245,158,11,0.30)',
+        margin: '0 auto 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="13" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+      <p style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
+        Datos fundamentales no disponibles para este tipo de activo
+      </p>
+      <p style={{ fontSize: 12, color: '#64748b', margin: '8px 0 0', lineHeight: 1.55 }}>
+        ETFs, índices y fondos no se evalúan con métricas fundamentales.
+        Busca una acción individual para ver su análisis.
+      </p>
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div style={{
+      animation: 'wos-fadein 0.35s ease',
+      background: 'rgba(239,68,68,0.05)',
+      border: '1px solid rgba(239,68,68,0.30)',
+      borderRadius: 16, padding: '22px 20px',
+      textAlign: 'center',
+    }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: '#fca5a5', margin: 0 }}>
+        Error al cargar los fundamentales
+      </p>
+      <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>
+        {message}
+      </p>
+    </div>
+  );
+}
+
+function DataView({ meta, data }: { meta: CompanyMeta; data: FundamentalAnalysis }) {
+  const snowflake = Math.round(
+    (data.value + data.future + data.past + data.health + data.dividend) / 5
+  );
+
+  const radarData = DIMENSIONS.map((d) => ({
+    dimension: d.label,
+    score: data[d.key],
+    fullMark: 100,
+  }));
+
+  return (
+    <div style={{ animation: 'wos-fadein 0.4s ease', display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Radar */}
       <div style={{
         background: 'rgba(255,255,255,0.03)',
         border: '1px solid rgba(255,255,255,0.07)',
         borderRadius: 24, padding: 20,
-        marginBottom: 16,
       }}>
         <div style={{ height: 280 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={radarData} outerRadius="78%">
+            {/* outerRadius 70% leaves room for axis labels so values at 100
+                don't clip against the card border. */}
+            <RadarChart data={radarData} outerRadius="70%">
               <defs>
                 <radialGradient id="snowflake-fill">
                   <stop offset="0%"  stopColor="#10b981" stopOpacity={0.55} />
@@ -326,7 +466,6 @@ export function AnalysisPage() {
         border: '1px solid rgba(255,255,255,0.07)',
         borderRadius: 20, padding: '20px 22px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-        marginBottom: 24,
       }}>
         <div style={{ minWidth: 0 }}>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#475569', margin: 0 }}>
@@ -350,7 +489,7 @@ export function AnalysisPage() {
       {/* Dimension cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {DIMENSIONS.map((d) => {
-          const score = analysis[d.key];
+          const score = data[d.key];
           const color = scoreColor(score);
           return (
             <div
@@ -396,14 +535,6 @@ export function AnalysisPage() {
           );
         })}
       </div>
-
-      {/* Mock data disclaimer */}
-      <p style={{
-        marginTop: 18, fontSize: 11, color: '#475569', fontStyle: 'italic',
-        textAlign: 'center', lineHeight: 1.5,
-      }}>
-        Los datos mostrados son ficticios. Conectaremos una fuente real de fundamentales en una próxima iteración.
-      </p>
     </div>
   );
 }
