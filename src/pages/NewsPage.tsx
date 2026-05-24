@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { useNews } from '../hooks/useNews';
+import { useNews, type NewsTab } from '../hooks/useNews';
 import { PageHeader } from '../components/ui/PageHeader';
 import { PullToRefresh } from '../components/ui/PullToRefresh';
 import { relativeTime } from '../constants/theme';
@@ -8,14 +8,16 @@ import { useUIStore } from '../stores/uiStore';
 import type { NewsItem } from '../types';
 
 /**
- * Market Intelligence feed, single editorial stream — no category filters.
- * Wide translucent cards, generous line-clamp on the body so readers can
- * absorb the context without leaving the app, and a discreet "Leer
- * artículo completo ↗" affordance at the bottom of each card that opens
- * the original source in a new tab.
+ * Market intelligence feed. Two tabs — a generic editorial wire and a
+ * personalised stream filtered by the user's portfolio. Headlines are
+ * strictly chronological (handled in the service layer).
+ *
+ * Each tab owns its own React Query cache slot, so pull-to-refresh and
+ * the header refresh icon both scope cleanly to the visible feed.
  */
 export function NewsPage() {
-  const { news, isLoading, refresh, markRead } = useNews();
+  const [tab, setTab] = useState<NewsTab>('general');
+  const { news, isLoading, refresh, markRead, hasTickers } = useNews(tab);
   const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
 
   // Hide bottom nav while the article reader is open.
@@ -36,8 +38,10 @@ export function NewsPage() {
     <PullToRefresh onRefresh={refresh}>
       <div style={{ padding: '0 20px 0' }}>
         <PageHeader
-          title="Market Intelligence"
-          subtitle="Actualidad financiera en directo"
+          title="Actualidad de Mercado"
+          subtitle={tab === 'general'
+            ? 'Actualidad global de inversión y macroeconomía'
+            : 'Noticias filtradas por tu cartera'}
           right={
             <button onClick={refresh} className="icon-btn" aria-label="Actualizar">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -49,10 +53,14 @@ export function NewsPage() {
           }
         />
 
-        {isLoading ? (
+        <TabSwitcher active={tab} onChange={setTab} />
+
+        {tab === 'personal' && !hasTickers ? (
+          <PersonalOnboarding />
+        ) : isLoading ? (
           <LoadingSkeleton />
         ) : news.length === 0 ? (
-          <EmptyState />
+          <EmptyState tab={tab} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
             {news.map((item, i) => (
@@ -92,6 +100,55 @@ export function NewsPage() {
   );
 }
 
+/* ─── Tabs ───────────────────────────────────────────────────────────── */
+
+function TabSwitcher({
+  active, onChange,
+}: {
+  active: NewsTab;
+  onChange: (t: NewsTab) => void;
+}) {
+  const TABS: { id: NewsTab; label: string }[] = [
+    { id: 'general',  label: 'General'  },
+    { id: 'personal', label: 'Para ti'  },
+  ];
+  return (
+    <div
+      role="tablist"
+      style={{
+        display: 'flex', gap: 4,
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 14, padding: 4,
+        marginBottom: 18,
+      }}
+    >
+      {TABS.map((t) => {
+        const isActive = t.id === active;
+        return (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(t.id)}
+            style={{
+              flex: 1, padding: '9px 12px',
+              background: isActive ? 'rgba(16,185,129,0.10)' : 'transparent',
+              border: isActive ? '1px solid rgba(16,185,129,0.30)' : '1px solid transparent',
+              borderRadius: 10,
+              color: isActive ? '#10b981' : '#94a3b8',
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.005em',
+              cursor: 'pointer', transition: 'all 0.18s',
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── Article card ───────────────────────────────────────────────────── */
 
 function ArticleCard({
@@ -107,21 +164,24 @@ function ArticleCard({
         background: 'rgba(255,255,255,0.03)',
         border: '1px solid rgba(255,255,255,0.07)',
         borderRadius: 20,
-        padding: '18px 20px 16px',
+        padding: 16,
         display: 'flex', flexDirection: 'column', gap: 12,
         animation: `wos-news-fadein 0.4s ${Math.min(index * 50, 250)}ms both`,
         opacity: item.isRead ? 0.68 : 1,
         transition: 'opacity 0.2s',
       }}
     >
+      {/* Hero / placeholder — always rendered, 16:9, on top of the card */}
+      <ArticleMedia item={item} onOpen={onOpen} />
+
       {/* Source · time strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 }}>
         <span style={{
           fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
           color: '#a78bfa', background: 'rgba(167,139,250,0.10)',
           border: '1px solid rgba(167,139,250,0.25)',
           borderRadius: 6, padding: '2px 8px',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200,
         }}>
           {item.source}
         </span>
@@ -131,7 +191,7 @@ function ArticleCard({
         </span>
       </div>
 
-      {/* Title — also opens the reader */}
+      {/* Title — opens the reader */}
       <button
         onClick={onOpen}
         style={{
@@ -143,29 +203,7 @@ function ArticleCard({
         {item.title}
       </button>
 
-      {/* Hero image (if present) */}
-      {item.imageUrl && (
-        <button
-          onClick={onOpen}
-          style={{
-            padding: 0, background: 'transparent', border: 'none', cursor: 'pointer',
-            borderRadius: 14, overflow: 'hidden', height: 160,
-          }}
-        >
-          <img
-            src={item.imageUrl}
-            alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            onError={(e) => {
-              const parent = (e.currentTarget as HTMLImageElement).parentElement as HTMLElement | null;
-              if (parent) parent.style.display = 'none';
-            }}
-            loading="lazy"
-          />
-        </button>
-      )}
-
-      {/* Body excerpt — line-clamp 5 lines */}
+      {/* Body excerpt — line-clamp 5 */}
       {item.description && (
         <p
           className="wos-clamp-5"
@@ -185,7 +223,7 @@ function ArticleCard({
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            marginTop: 4,
+            marginTop: 2,
             fontSize: 12, fontWeight: 600,
             color: '#10b981', textDecoration: 'none',
             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -203,6 +241,79 @@ function ArticleCard({
   );
 }
 
+/* ─── Hero media (image w/ fallback to elegant placeholder) ──────────── */
+
+function ArticleMedia({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = !!item.imageUrl && !failed;
+
+  return (
+    <button
+      onClick={onOpen}
+      aria-label="Abrir artículo"
+      style={{
+        position: 'relative',
+        padding: 0, border: 'none', cursor: 'pointer',
+        background: 'transparent',
+        width: '100%',
+        aspectRatio: '16 / 9',
+        borderRadius: 14, overflow: 'hidden',
+      }}
+    >
+      {showImage ? (
+        <img
+          src={item.imageUrl}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        <MediaPlaceholder />
+      )}
+    </button>
+  );
+}
+
+/** Dark gradient placeholder with a discrete financial icon — keeps the
+    grid visually symmetrical when FMP returns an article without imageUrl. */
+function MediaPlaceholder() {
+  return (
+    <div
+      style={{
+        width: '100%', height: '100%',
+        background:
+          'linear-gradient(135deg, #0f172a 0%, #111c30 50%, #0a0f1e 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative',
+        border: '1px solid rgba(255,255,255,0.04)',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* faint grid pattern for "terminal" texture */}
+      <div
+        style={{
+          position: 'absolute', inset: 0,
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),' +
+            'linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+          opacity: 0.4,
+        }}
+      />
+      {/* Trending-up glyph in muted slate */}
+      <svg
+        width="48" height="48" viewBox="0 0 24 24" fill="none"
+        stroke="#475569" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+        style={{ position: 'relative', opacity: 0.7 }}
+      >
+        <polyline points="3 17 9 11 13 15 21 7" />
+        <polyline points="14 7 21 7 21 14" />
+      </svg>
+    </div>
+  );
+}
+
 /* ─── Empty / loading states ─────────────────────────────────────────── */
 
 function LoadingSkeleton() {
@@ -214,18 +325,24 @@ function LoadingSkeleton() {
           style={{
             background: 'rgba(255,255,255,0.03)',
             border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 20, padding: 20,
+            borderRadius: 20, padding: 16,
             animation: 'wos-news-skel 1.6s ease-in-out infinite',
             animationDelay: `${i * 90}ms`,
-            height: 220,
+            display: 'flex', flexDirection: 'column', gap: 12,
           }}
-        />
+        >
+          <div style={{ aspectRatio: '16 / 9', background: 'rgba(255,255,255,0.04)', borderRadius: 14 }} />
+          <div style={{ height: 10, width: 110, background: 'rgba(255,255,255,0.05)', borderRadius: 4 }} />
+          <div style={{ height: 16, width: '85%', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />
+          <div style={{ height: 10, width: '100%', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }} />
+          <div style={{ height: 10, width: '92%', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }} />
+        </div>
       ))}
     </div>
   );
 }
 
-function EmptyState() {
+function EmptyState({ tab }: { tab: NewsTab }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.03)',
@@ -234,11 +351,44 @@ function EmptyState() {
       textAlign: 'center',
     }}>
       <p style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
-        No hay noticias disponibles ahora mismo
+        {tab === 'personal'
+          ? 'No hay noticias recientes para tus posiciones'
+          : 'No hay noticias disponibles ahora mismo'}
       </p>
       <p style={{ fontSize: 12, color: '#64748b', margin: '8px 0 0', lineHeight: 1.55 }}>
         Tira hacia abajo para volver a intentarlo. El feed se reconecta
         automáticamente cada 3 minutos.
+      </p>
+    </div>
+  );
+}
+
+function PersonalOnboarding() {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.03)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 20, padding: '40px 24px',
+      textAlign: 'center',
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        background: 'rgba(16,185,129,0.10)',
+        border: '1px solid rgba(16,185,129,0.30)',
+        margin: '0 auto 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+        </svg>
+      </div>
+      <p style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
+        Aún no tienes posiciones en tu cartera
+      </p>
+      <p style={{ fontSize: 12, color: '#64748b', margin: '8px 0 0', lineHeight: 1.55 }}>
+        Añade activos desde la pestaña Perfil y este feed mostrará automáticamente
+        las noticias relevantes para cada uno de ellos.
       </p>
     </div>
   );
@@ -304,14 +454,18 @@ function ArticleReader({
             minHeight: 0,
           }}
         >
-          {article.imageUrl && (
-            <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, height: 180 }}>
+          {article.imageUrl ? (
+            <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, aspectRatio: '16 / 9' }}>
               <img
                 src={article.imageUrl}
                 alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
+            </div>
+          ) : (
+            <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, aspectRatio: '16 / 9' }}>
+              <MediaPlaceholder />
             </div>
           )}
 

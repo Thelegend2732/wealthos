@@ -61,10 +61,17 @@ interface FmpNewsItem {
   url?: string;
 }
 
-async function fetchFromFMP(): Promise<NewsItem[]> {
+async function fetchFromFMP(tickers?: string[]): Promise<NewsItem[]> {
   // Cache-bust on every call so neither the browser nor any CDN can pin
-  // a stale wire feed.
-  const url = `https://financialmodelingprep.com/api/v3/stock_news?limit=25&apikey=${FMP_KEY}&_=${Date.now()}`;
+  // a stale wire feed. When tickers are supplied we hit FMP's native
+  // per-symbol filter (?tickers=AAPL,MSFT,…) so the response is already
+  // restricted to the user's portfolio — no client-side filtering needed.
+  const params = new URLSearchParams({ limit: '25', apikey: FMP_KEY });
+  if (tickers && tickers.length > 0) {
+    params.set('tickers', tickers.map((t) => t.toUpperCase()).join(','));
+  }
+  params.set('_', String(Date.now()));
+  const url = `https://financialmodelingprep.com/api/v3/stock_news?${params.toString()}`;
   const res = await fetch(url, {
     cache: 'no-store',
     headers: { Accept: 'application/json' },
@@ -166,20 +173,47 @@ function stripHtml(s: string): string {
 
 /* ─── Public entry point ────────────────────────────────────────────── */
 
-export async function fetchNews(): Promise<NewsItem[]> {
-  // FMP first — clean JSON, fastest, no parsing
+/** Strict chronological ordering — most recent first. Applied to every
+    returned array so the UI never has to re-sort. */
+function sortByRecency(items: NewsItem[]): NewsItem[] {
+  return [...items].sort(
+    (a, b) =>
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+  );
+}
+
+/**
+ * Fetch the market intelligence feed.
+ *
+ * @param tickers When non-empty, hits FMP's per-symbol filter so the
+ *   result is restricted to those companies. Used by the "Para ti"
+ *   personalised feed driven by the user's portfolio.
+ *
+ * When tickers are supplied the Yahoo RSS fallback is skipped — that
+ * feed is generic, so falling back to it for a personalised request
+ * would silently break the contract and show unrelated headlines.
+ */
+export async function fetchNews(tickers?: string[]): Promise<NewsItem[]> {
+  const personalised = !!tickers && tickers.length > 0;
+
+  // FMP first — clean JSON, fastest, supports per-symbol filtering
   try {
-    const items = await fetchFromFMP();
-    if (items.length > 0) return items;
-    console.warn('[news] FMP returned an empty list, trying Yahoo RSS');
+    const items = await fetchFromFMP(tickers);
+    if (items.length > 0) return sortByRecency(items);
+    console.warn(
+      `[news] FMP returned an empty list${personalised ? ' for personalised feed' : ''}`,
+    );
   } catch (err) {
-    console.error('[news] FMP failed, falling back to Yahoo RSS', err);
+    console.error('[news] FMP failed', err);
   }
 
-  // Yahoo RSS fallback
+  // Yahoo RSS fallback ONLY for the global feed — RSS is unfiltered, so
+  // serving it on a personalised request would mislead the user.
+  if (personalised) return [];
+
   try {
     const xml = await fetchYahooRSSThroughProxy();
-    return parseRSS(xml);
+    return sortByRecency(parseRSS(xml));
   } catch (err) {
     console.error('[news] Yahoo RSS fallback also failed', err);
     return [];
