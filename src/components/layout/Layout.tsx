@@ -1,11 +1,12 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Home, BarChart2, User } from 'lucide-react';
+import { Home, BarChart2, Activity, User } from 'lucide-react';
 import { useIsModalOpen } from '../../stores/uiStore';
 
 const TABS = [
-  { icon: Home, label: 'Inicio', route: '/' },
+  { icon: Home,      label: 'Inicio',   route: '/' },
   { icon: BarChart2, label: 'Noticias', route: '/news' },
-  { icon: User, label: 'Perfil', route: '/settings' },
+  { icon: Activity,  label: 'Análisis', route: '/analysis' },
+  { icon: User,      label: 'Perfil',   route: '/settings' },
 ];
 
 export function Layout() {
@@ -93,9 +94,9 @@ export function Layout() {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                 background: active ? 'rgba(16,185,129,0.12)' : 'transparent',
                 border: active ? '1px solid rgba(16,185,129,0.2)' : '1px solid transparent',
-                borderRadius: 14, padding: '8px 22px',
+                borderRadius: 14, padding: '8px 12px',
                 cursor: 'pointer', transition: 'all 0.2s',
-                minWidth: 80,
+                flex: 1, minWidth: 0,
               }}
             >
               <Icon size={20} color={active ? '#10b981' : '#475569'} />

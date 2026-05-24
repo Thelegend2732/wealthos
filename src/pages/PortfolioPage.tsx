@@ -102,17 +102,17 @@ function PositionCard({ data, delay }: { data: CardData; delay: number }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontWeight: 600, fontSize: 14, color: '#f1f5f9', letterSpacing: '0.01em' }}>{asset.name}</span>
-          <span style={{ fontWeight: 700, fontSize: 14, color: '#f1f5f9' }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: '#f1f5f9', letterSpacing: '0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginRight: 8 }}>{asset.name}</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#f1f5f9', flexShrink: 0 }}>
             {value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-          <span style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginRight: 8 }}>
             {asset.symbol} · {CATEGORY_LABELS_ES[asset.category] ?? asset.category}
           </span>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 3,
+            display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0,
             background: isPos ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
             border: `1px solid ${isPos ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
             borderRadius: 8, padding: '2px 8px',
@@ -144,16 +144,10 @@ export function PortfolioPage() {
   const { rates, refresh: refetchFx } = useEurFx();
   const qc = useQueryClient();
 
-  // PnL contract — strict, milimétrica, matches the user spec exactly:
-  //   priceEur = toEur(asset.currentPrice, asset.currency, rates)
-  //   pnl%     = ((priceEur - avgPrice) / avgPrice) * 100
-  // Per-position pct equals (value - cost) / cost * 100 because the quantity
-  // cancels out — verified with the canonical case: buy @50€, market @100€
-  //   → priceEur=100, avg=50 → (100-50)/50 * 100 = +100.00%
   const cardData: CardData[] = assets.map((asset, i) => {
     const priceEur = toEur(asset.currentPrice, asset.currency, rates);
     const value = priceEur * asset.quantity;
-    const cost  = asset.avgPrice * asset.quantity; // avgPrice already EUR
+    const cost  = asset.avgPrice * asset.quantity;
     return {
       asset,
       color: PALETTE[i % PALETTE.length],
@@ -169,7 +163,6 @@ export function PortfolioPage() {
   const totalPct   = totalCost > 0 ? ((totalGain / totalCost) * 100).toFixed(2) : '0.00';
   const isGain     = totalGain >= 0;
 
-  // Fill weights now that totalValue is known
   cardData.forEach((d) => {
     d.weight = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
   });
@@ -191,7 +184,7 @@ export function PortfolioPage() {
   return (
     <PullToRefresh onRefresh={handleRefresh}>
       <div style={{ color: '#f1f5f9' }}>
-        {/* Header — unified typography (no bell icon) */}
+        {/* Header */}
         <div style={{ padding: '40px 20px 20px', animation: 'slideIn 0.4s both' }}>
           <h1
             style={{
@@ -207,7 +200,7 @@ export function PortfolioPage() {
               background: isLoading ? '#f59e0b' : '#10b981',
               display: 'inline-block', animation: 'pulse 2s infinite',
             }} />
-            {isLoading ? 'Actualizando precios…' : 'Datos en directo · Yahoo Finance'}
+            {isLoading ? 'Actualizando precios…' : 'Datos en directo · Twelve Data'}
           </p>
 
           <div style={{ marginTop: 26 }}>
@@ -256,12 +249,21 @@ export function PortfolioPage() {
               <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{assets.length}</div>
             </div>
           </div>
-          <div style={{ flex: 1 }}>
+          
+          {/* Legend list container with minWidth: 0 to allow flex children to truncate */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             {cardData.map((d) => (
               <div key={d.asset.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0, boxShadow: `0 0 6px ${d.color}` }} />
-                <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{d.asset.symbol}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>{d.weight.toFixed(0)}%</span>
+                <span style={{ 
+                  fontSize: 12, color: '#94a3b8', flex: 1,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
+                  {d.asset.name}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', flexShrink: 0 }}>
+                  {d.weight.toFixed(0)}%
+                </span>
               </div>
             ))}
           </div>

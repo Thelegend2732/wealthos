@@ -1,27 +1,17 @@
-/**
- * Yahoo Finance integration (search + spot quotes) plus EUR FX conversion.
- *
- * Yahoo's endpoints don't send CORS headers, so all browser calls go through
- * a proxy. We try a chain of free proxies in order; the first that returns
- * a 200 wins. Override the priority list via `VITE_CORS_PROXY` in `.env`
- * (comma-separated). All proxy URLs MUST end with the part where the target
- * URL is appended (e.g. `https://corsproxy.io/?url=`).
- */
-
 import type { AssetCategory } from '../types';
 
 export interface SymbolMatch {
   symbol: string;
   name: string;
   category: AssetCategory;
-  currency: string;       // native ticker currency, e.g. "USD", "EUR", "GBP"
+  currency: string;
   exchange?: string;
   quoteType?: string;
 }
 
 export interface QuoteData {
   symbol: string;
-  price: number;          // in the ticker's NATIVE currency
+  price: number;
   currency: string;
   change: number;
   changePercent: number;
@@ -29,198 +19,81 @@ export interface QuoteData {
   lastUpdated: Date;
 }
 
-// Priority list of CORS proxies. api.allorigins.win/raw is the primary —
-// it's the most permissive public proxy for Yahoo's quote and search
-// endpoints and returns the body verbatim (no JSON wrapping). corsproxy.io
-// is kept as a fallback. Override the order via VITE_CORS_PROXY.
-const ENV_PROXY = (import.meta.env.VITE_CORS_PROXY as string | undefined) || '';
-const PROXIES: string[] = ENV_PROXY
-  ? ENV_PROXY.split(',').map((s) => s.trim()).filter(Boolean)
-  : [
-      'https://api.allorigins.win/raw?url=',
-      'https://corsproxy.io/?url=',
-    ];
+const API_KEY = import.meta.env.VITE_TWELVEDATA_API_KEY || 'fe868355490048b6952e278a7a58ead6';
+const BASE_URL = 'https://api.twelvedata.com';
 
-function classifyQuoteType(qt?: string): AssetCategory {
-  const t = (qt ?? '').toUpperCase();
-  if (t === 'ETF') return 'etf';
-  if (t === 'MUTUALFUND' || t === 'INDEX') return 'index-fund';
+function classifyInstrumentType(type?: string): AssetCategory {
+  const t = (type ?? '').toUpperCase();
+  if (t.includes('ETF')) return 'etf';
+  if (t.includes('MUTUAL FUND') || t.includes('INDEX')) return 'index-fund';
   return 'stock';
 }
 
-const CACHE_PREFIX = 'wealthos:yfquote:';
-const CACHE_TTL = 60 * 1000; // 1 minute
-
-interface Cached { data: QuoteData; ts: number; }
-
-function getCachedQuote(symbol: string): QuoteData | null {
-  try {
-    const raw = localStorage.getItem(`${CACHE_PREFIX}${symbol}`);
-    if (!raw) return null;
-    const c: Cached = JSON.parse(raw);
-    if (Date.now() - c.ts > CACHE_TTL) return null;
-    return { ...c.data, lastUpdated: new Date(c.data.lastUpdated) };
-  } catch {
-    return null;
-  }
-}
-
-function setCachedQuote(symbol: string, data: QuoteData) {
-  try {
-    localStorage.setItem(
-      `${CACHE_PREFIX}${symbol}`,
-      JSON.stringify({ data, ts: Date.now() })
-    );
-  } catch {
-    /* quota */
-  }
-}
-
-/**
- * Fetches a URL through whichever CORS proxy responds first. Logs the proxy
- * name and HTTP status on failure so production debugging is possible from
- * the browser console.
- */
-async function proxiedFetchJSON<T>(targetUrl: string, label: string): Promise<T> {
-  let lastError: unknown = null;
-  for (const proxy of PROXIES) {
-    const url = `${proxy}${encodeURIComponent(targetUrl)}`;
-    try {
-      const res = await fetch(url, {
-        // Force the BROWSER cache off — proxies sometimes set Cache-Control
-        // headers that pin stale Yahoo responses for hours.
-        cache: 'no-store',
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!res.ok) {
-        console.error(`[yahoo:${label}] proxy ${proxy} → HTTP ${res.status}`);
-        lastError = new Error(`HTTP ${res.status}`);
-        continue;
-      }
-      const text = await res.text();
-      try {
-        return JSON.parse(text) as T;
-      } catch (parseErr) {
-        // allorigins sometimes wraps the response — try .contents
-        try {
-          const wrapped = JSON.parse(text) as { contents?: string };
-          if (wrapped.contents) return JSON.parse(wrapped.contents) as T;
-        } catch {
-          /* fallthrough */
-        }
-        console.error(`[yahoo:${label}] proxy ${proxy} → invalid JSON`, parseErr);
-        lastError = parseErr;
-        continue;
-      }
-    } catch (err) {
-      console.error(`[yahoo:${label}] proxy ${proxy} → fetch error`, err);
-      lastError = err;
-    }
-  }
-  throw lastError ?? new Error('All CORS proxies failed');
-}
-
-/**
- * Search the global Yahoo Finance universe. Returns [] on failure — never
- * throws, so callers can render an empty state instead of crashing.
- */
 export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
   const q = query.trim();
   if (!q) return [];
 
-  // Cache-bust the underlying Yahoo call so the proxy never serves a stale
-  // result keyed on the URL.
-  const target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&lang=es-ES&region=ES&_=${Date.now()}`;
+  const url = `${BASE_URL}/symbol_search?symbol=${encodeURIComponent(q)}&apikey=${API_KEY}`;
 
   try {
-    const json = await proxiedFetchJSON<{
-      quotes?: Array<{
-        symbol: string;
-        shortname?: string;
-        longname?: string;
-        quoteType?: string;
-        exchDisp?: string;
-        exchange?: string;
-        currency?: string;
-      }>;
-    }>(target, 'search');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    
+    const json = await res.json();
+    const data = json.data ?? [];
 
-    const quotes = json.quotes ?? [];
-    return quotes
-      .filter((q) => q.symbol && (q.shortname || q.longname))
-      .map<SymbolMatch>((q) => ({
-        symbol: q.symbol,
-        name: q.longname || q.shortname || q.symbol,
-        category: classifyQuoteType(q.quoteType),
-        currency: (q.currency || 'USD').toUpperCase(),
-        exchange: q.exchDisp || q.exchange,
-        quoteType: q.quoteType,
+    return data
+      .map((item: any): SymbolMatch => ({
+        symbol: item.symbol,
+        name: item.instrument_name || item.symbol,
+        category: classifyInstrumentType(item.instrument_type),
+        currency: (item.currency || 'EUR').toUpperCase(),
+        exchange: item.exchange,
+        quoteType: item.instrument_type,
       }))
       .slice(0, 10);
   } catch (err) {
-    console.error('[yahoo:search] giving up after all proxies failed', err);
+    console.error('[TwelveData:Search] Error buscando activo:', err);
     return [];
   }
 }
 
-/**
- * Fetch a single quote in the asset's NATIVE currency.
- */
 export async function fetchQuote(symbol: string): Promise<QuoteData | null> {
-  const cached = getCachedQuote(symbol);
-  if (cached) return cached;
-
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d&_=${Date.now()}`;
+  const url = `${BASE_URL}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`;
 
   try {
-    const json = await proxiedFetchJSON<{
-      chart?: {
-        result?: Array<{
-          meta?: {
-            regularMarketPrice?: number;
-            chartPreviousClose?: number;
-            previousClose?: number;
-            currency?: string;
-            marketState?: string;
-          };
-        }>;
-        error?: unknown;
-      };
-    }>(target, `quote:${symbol}`);
-
-    const r = json.chart?.result?.[0];
-    const m = r?.meta;
-    if (!m || typeof m.regularMarketPrice !== 'number') {
-      console.error(`[yahoo:quote:${symbol}] no regularMarketPrice in payload`, json);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    
+    const data = await res.json();
+    
+    if (data.code || (!data.close && !data.price)) {
+      console.warn(`[TwelveData:Quote] Sin datos para: ${symbol}`, data);
       return null;
     }
 
-    const price = m.regularMarketPrice;
-    const prev = m.chartPreviousClose ?? m.previousClose ?? price;
-    const change = price - prev;
-    const changePercent = prev > 0 ? (change / prev) * 100 : 0;
+    const price = parseFloat(data.close || data.price);
+    const change = parseFloat(data.change || '0');
+    const changePercent = parseFloat(data.percent_change || '0');
 
-    const data: QuoteData = {
-      symbol,
+    return {
+      symbol: data.symbol,
       price,
-      currency: (m.currency || 'USD').toUpperCase(),
+      currency: (data.currency || 'USD').toUpperCase(),
       change,
       changePercent,
-      marketState: m.marketState,
       lastUpdated: new Date(),
     };
-    setCachedQuote(symbol, data);
-    return data;
   } catch (err) {
-    console.error(`[yahoo:quote:${symbol}] all proxies failed`, err);
+    console.error(`[TwelveData:Quote] Fallo al obtener precio para ${symbol}:`, err);
     return null;
   }
 }
 
-export async function fetchQuotes(
-  symbols: string[]
-): Promise<Record<string, QuoteData>> {
+export async function fetchQuotes(symbols: string[]): Promise<Record<string, QuoteData>> {
   const out: Record<string, QuoteData> = {};
+  if (symbols.length === 0) return out;
+  
   const results = await Promise.all(symbols.map((s) => fetchQuote(s)));
   symbols.forEach((s, i) => {
     const r = results[i];
