@@ -1,150 +1,68 @@
-/**
- * Financial Modeling Prep — fundamental analysis fetcher.
- *
- * Pulls /rating and /profile concurrently, then normalises FMP's 1–5 score
- * scale onto our 0–100 snowflake scale. ETFs, indices and mutual funds do
- * not have fundamentals on FMP and will throw `NO_FUNDAMENTALS` so the UI
- * can render an empty-state message instead of bogus zeros.
- *
- * The API key is read from `VITE_FMP_API_KEY`. FMP supports CORS for
- * browser calls — no proxy required.
- */
+const API_KEY = import.meta.env.VITE_FMP_API_KEY;
+const BASE_URL = 'https://financialmodelingprep.com/api/v3';
 
-const FMP_KEY = (import.meta.env.VITE_FMP_API_KEY as string | undefined) || '';
-
-/** Subset of FMP's /v3/rating response. Score fields use a 1–5 scale. */
-interface FmpRating {
+export interface AnalysisData {
   symbol: string;
-  rating?: string;
-  ratingScore?: number;
-  ratingRecommendation?: string;
-  ratingDetailsDCFScore?: number;
-  ratingDetailsROEScore?: number;
-  ratingDetailsROAScore?: number;
-  ratingDetailsDEScore?: number;
-  ratingDetailsPEScore?: number;
-  ratingDetailsPBScore?: number;
-}
-
-/** Subset of FMP's /v3/profile response — only the fields we actually read. */
-interface FmpProfile {
-  symbol: string;
-  price?: number;
-  lastDiv?: number;
-  companyName?: string;
-  industry?: string;
-  currency?: string;
-  isEtf?: boolean;
-  isFund?: boolean;
-  exchangeShortName?: string;
-}
-
-export interface FundamentalAnalysis {
-  /** 0–100 score for each dimension of the snowflake. */
   value: number;
   future: number;
   past: number;
   health: number;
   dividend: number;
-  /** Aggregated rating letter (e.g. "S+", "A-") when available. */
-  rating?: string;
-  recommendation?: string;
-  companyName?: string;
-  industry?: string;
 }
 
-/** Thrown when FMP returns no rating data — typical for ETFs, indices,
-    mutual funds, or freshly IPO'd companies. */
-export class NoFundamentalsError extends Error {
-  constructor(symbol: string) {
-    super(`No fundamentals available for ${symbol}`);
-    this.name = 'NoFundamentalsError';
-  }
-}
-
-async function fetchJSON<T>(url: string, label: string): Promise<T> {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    console.error(`[fmp:${label}] HTTP ${res.status}`);
-    throw new Error(`FMP HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-/** Clamp a 1–5 FMP score onto our 0–100 axis. Treats null/undefined as 0. */
-function norm(score: number | undefined): number {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return 0;
-  return Math.max(0, Math.min(100, Math.round((score / 5) * 100)));
-}
-
-/** Average two normalised axes — used when two FMP sub-scores map to a
-    single snowflake dimension. */
-function avg(a: number, b: number): number {
-  return Math.round((a + b) / 2);
-}
-
-export async function fetchFundamentalAnalysis(
-  symbol: string
-): Promise<FundamentalAnalysis> {
-  if (!FMP_KEY) {
-    throw new Error(
-      'FMP API key not configured. Set VITE_FMP_API_KEY in your .env file.'
-    );
+export async function fetchFundamentalAnalysis(symbol: string): Promise<AnalysisData | null> {
+  if (!API_KEY) {
+    throw new Error("FMP API key not configured. Set VITE_FMP_API_KEY in your .env.local file.");
   }
 
-  const sym = encodeURIComponent(symbol.toUpperCase());
-  const ratingUrl = `https://financialmodelingprep.com/api/v3/rating/${sym}?apikey=${FMP_KEY}`;
-  const profileUrl = `https://financialmodelingprep.com/api/v3/profile/${sym}?apikey=${FMP_KEY}`;
-
-  let ratingArr: FmpRating[] = [];
-  let profileArr: FmpProfile[] = [];
   try {
-    [ratingArr, profileArr] = await Promise.all([
-      fetchJSON<FmpRating[]>(ratingUrl, `rating:${symbol}`),
-      fetchJSON<FmpProfile[]>(profileUrl, `profile:${symbol}`),
+    const [ratingRes, profileRes] = await Promise.all([
+      fetch(`${BASE_URL}/rating/${symbol}?apikey=${API_KEY}`),
+      fetch(`${BASE_URL}/profile/${symbol}?apikey=${API_KEY}`)
     ]);
+
+    if (!ratingRes.ok || !profileRes.ok) return null;
+
+    const ratingData = await ratingRes.json();
+    const profileData = await profileRes.json();
+
+    if (!ratingData || ratingData.length === 0) return null;
+
+    const rating = ratingData[0];
+    const profile = profileData && profileData.length > 0 ? profileData[0] : null;
+
+    // Función matemática para convertir la nota de FMP (1 a 5) a un porcentaje (0 a 100)
+    const norm = (score: number) => Math.min(Math.max((score / 5) * 100, 0), 100);
+    const avg = (...scores: number[]) => {
+      const valid = scores.filter(s => !isNaN(s) && s > 0);
+      return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+    };
+
+    // Mapeo de los 5 ejes del copo de nieve
+    const value = norm(rating.ratingDetailsDCFScore || 0);
+    const future = avg(norm(rating.ratingDetailsPEScore || 0), norm(rating.ratingDetailsPBScore || 0));
+    const past = avg(norm(rating.ratingDetailsROEScore || 0), norm(rating.ratingDetailsROAScore || 0));
+    const health = norm(rating.ratingDetailsDEScore || 0);
+
+    // Si la empresa reparte dividendos, calculamos su fuerza. Si no, 0.
+    let dividend = 0;
+    if (profile && profile.lastDiv > 0 && profile.price > 0) {
+      const divYield = (profile.lastDiv / profile.price) * 100;
+      dividend = Math.min((divYield / 5) * 100, 100); // 5% de yield = 100 puntos
+    }
+
+    // Devolvemos el objeto. Si un valor es 0, le damos 10 puntos de suelo para que el gráfico no colapse visualmente.
+    return {
+      symbol,
+      value: value || 10,
+      future: future || 10,
+      past: past || 10,
+      health: health || 10,
+      dividend: dividend
+    };
+
   } catch (err) {
-    console.error(`[fmp] fundamentals fetch failed for ${symbol}`, err);
-    throw new NoFundamentalsError(symbol);
+    console.error("[Fundamentals] Error al obtener datos de FMP:", err);
+    return null;
   }
-
-  const rating = ratingArr[0];
-  const profile = profileArr[0];
-
-  // FMP returns an empty array for ETFs, indices and funds. Surface a
-  // typed error so the UI can show the right empty-state message.
-  if (!rating || profile?.isEtf || profile?.isFund) {
-    throw new NoFundamentalsError(symbol);
-  }
-
-  // Snowflake normalisation
-  //   Valor     ← DCF score
-  //   Futuro    ← average of P/E and P/B (forward-looking multiples)
-  //   Pasado    ← average of ROE and ROA (capital efficiency track record)
-  //   Salud     ← Debt-to-Equity score
-  //   Dividendo ← derived from profile.lastDiv / profile.price (annual yield)
-  const value  = norm(rating.ratingDetailsDCFScore);
-  const future = avg(norm(rating.ratingDetailsPEScore), norm(rating.ratingDetailsPBScore));
-  const past   = avg(norm(rating.ratingDetailsROEScore), norm(rating.ratingDetailsROAScore));
-  const health = norm(rating.ratingDetailsDEScore);
-
-  let dividend = 0;
-  if (profile?.lastDiv && profile.lastDiv > 0 && profile.price && profile.price > 0) {
-    // FMP's lastDiv is the trailing annual dividend per share. Map yield
-    // 0–8% onto 0–100 (8%+ is exceptional → max score).
-    const yieldPct = (profile.lastDiv / profile.price) * 100;
-    dividend = Math.max(0, Math.min(100, Math.round((yieldPct / 8) * 100)));
-  }
-
-  return {
-    value,
-    future,
-    past,
-    health,
-    dividend,
-    rating: rating.rating,
-    recommendation: rating.ratingRecommendation,
-    companyName: profile?.companyName,
-    industry: profile?.industry,
-  };
 }

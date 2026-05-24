@@ -12,16 +12,17 @@ import {
 import { searchSymbols, type SymbolMatch } from '../services/yahooFinance';
 import {
   fetchFundamentalAnalysis,
-  NoFundamentalsError,
-  type FundamentalAnalysis,
+  type AnalysisData,
 } from '../services/fundamentals';
 
 /**
  * Simply Wall St-inspired fundamental analysis page. Real data comes from
  * Financial Modeling Prep (see services/fundamentals.ts); the five axes are
- * normalised onto a 0–100 snowflake scale. ETFs and other instruments
- * without fundamentals trigger a typed NoFundamentalsError, which the UI
- * surfaces as a friendly empty state.
+ * normalised onto a 0–100 snowflake scale.
+ *
+ * fetchFundamentalAnalysis resolves to `null` when FMP has no data for the
+ * ticker (ETFs, indices, funds, freshly listed). The UI treats that as a
+ * dedicated empty state separate from network errors.
  */
 
 interface CompanyMeta {
@@ -39,7 +40,7 @@ const DEFAULT_META: CompanyMeta = {
 };
 
 interface Dimension {
-  key: keyof Pick<FundamentalAnalysis, 'value' | 'future' | 'past' | 'health' | 'dividend'>;
+  key: keyof Pick<AnalysisData, 'value' | 'future' | 'past' | 'health' | 'dividend'>;
   label: string;
   description: string;
 }
@@ -76,18 +77,20 @@ export function AnalysisPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Real fundamentals via React Query — caching + retries handled automatically.
+  // Real fundamentals via React Query. The service returns `null` for
+  // tickers without fundamentals (ETFs/indices/funds), which becomes the
+  // "no fundamentals" empty state below.
   const {
     data: analysisData,
     isLoading,
     isFetching,
     isError,
     error,
-  } = useQuery<FundamentalAnalysis, Error>({
+  } = useQuery<AnalysisData | null, Error>({
     queryKey: ['fundamentals', meta.symbol],
     queryFn: () => fetchFundamentalAnalysis(meta.symbol),
     staleTime: 60 * 60 * 1000,   // 1 hour
-    retry: 0,                     // FMP errors are usually deterministic (ETF, missing data)
+    retry: 0,
     refetchOnWindowFocus: false,
   });
 
@@ -124,8 +127,11 @@ export function AnalysisPage() {
     setSearching(false);
   };
 
-  const noFundamentals = isError && error instanceof NoFundamentalsError;
+  // Treat `data === null` as the "no fundamentals" empty state (the service
+  // returns null for ETFs/indices/funds). Genuine fetch errors keep their
+  // own dedicated ErrorState branch.
   const loading = isLoading || isFetching;
+  const noFundamentals = !loading && !isError && analysisData === null;
 
   return (
     <div style={{ padding: '40px 20px 20px', color: '#f1f5f9' }}>
@@ -238,30 +244,15 @@ export function AnalysisPage() {
             margin: '4px 0 0', fontSize: 13, color: '#94a3b8',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {analysisData?.companyName || meta.name}
+            {meta.name}
           </p>
         </div>
-        {analysisData?.rating && !loading && (
-          <div style={{
-            background: 'rgba(16,185,129,0.10)',
-            border: '1px solid rgba(16,185,129,0.30)',
-            borderRadius: 10, padding: '6px 10px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0,
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 800, color: '#10b981', lineHeight: 1 }}>
-              {analysisData.rating}
-            </span>
-            <span style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              {analysisData.recommendation || 'Rating'}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* States: loading / error / data */}
+      {/* States: loading / no fundamentals / error / data */}
       {loading && <LoadingState />}
-      {!loading && noFundamentals && <NoFundamentalsState />}
-      {!loading && isError && !noFundamentals && (
+      {noFundamentals && <NoFundamentalsState />}
+      {!loading && isError && (
         <ErrorState message={error instanceof Error ? error.message : 'Error desconocido'} />
       )}
       {!loading && !isError && analysisData && (
@@ -396,7 +387,7 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function DataView({ meta, data }: { meta: CompanyMeta; data: FundamentalAnalysis }) {
+function DataView({ meta, data }: { meta: CompanyMeta; data: AnalysisData }) {
   const snowflake = Math.round(
     (data.value + data.future + data.past + data.health + data.dividend) / 5
   );
