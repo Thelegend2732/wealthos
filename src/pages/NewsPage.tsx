@@ -245,6 +245,13 @@ function ArticleCard({
 
 function ArticleMedia({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  // Reset on URL change so HMR / new feed items don't carry over stale failure state.
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [item.imageUrl]);
+
   const showImage = !!item.imageUrl && !failed;
 
   return (
@@ -260,16 +267,31 @@ function ArticleMedia({ item, onOpen }: { item: NewsItem; onOpen: () => void }) 
         borderRadius: 14, overflow: 'hidden',
       }}
     >
-      {showImage ? (
+      {/* Placeholder is ALWAYS rendered underneath the image. While the
+          image is loading or if it ultimately fails, the placeholder is
+          what the user sees — symmetry preserved, no flash of empty box. */}
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <MediaPlaceholder />
+      </div>
+      {showImage && (
         <img
           src={item.imageUrl}
           alt=""
           loading="lazy"
+          // `no-referrer` defeats most hotlink protection (sites whitelist
+          // requests with an empty Referer). `crossOrigin` left default so
+          // the image isn't tainted for layout purposes.
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'cover', display: 'block',
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.25s ease',
+          }}
         />
-      ) : (
-        <MediaPlaceholder />
       )}
     </button>
   );
@@ -454,20 +476,20 @@ function ArticleReader({
             minHeight: 0,
           }}
         >
-          {article.imageUrl ? (
-            <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, aspectRatio: '16 / 9' }}>
+          <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, aspectRatio: '16 / 9', position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0 }}>
+              <MediaPlaceholder />
+            </div>
+            {article.imageUrl && (
               <img
                 src={article.imageUrl}
                 alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                referrerPolicy="no-referrer"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
-            </div>
-          ) : (
-            <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 20, aspectRatio: '16 / 9' }}>
-              <MediaPlaceholder />
-            </div>
-          )}
+            )}
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <span style={{

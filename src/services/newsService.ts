@@ -28,6 +28,46 @@ const CORS_PROXIES: string[] = (
   .map((s) => s.trim())
   .filter(Boolean);
 
+/**
+ * Sources we'll surface on the General feed. Matched case-insensitively
+ * against FMP's `site` field as a substring, so "bloomberg.com",
+ * "Bloomberg" and "www.bloomberg.com" all qualify.
+ */
+const PREMIUM_SOURCES: readonly string[] = [
+  'bloomberg',
+  'reuters',
+  'wall street journal',
+  'wsj',
+  'financial times',
+  'ft.com',
+  'cnbc',
+  'yahoo',          // Yahoo Finance
+  'marketwatch',
+  'forbes',
+  'barron',         // Barron's
+  'seeking alpha',
+  'investing.com',
+  'benzinga',
+  'morningstar',
+  'business insider',
+];
+
+function isPremiumSource(site: string | undefined | null): boolean {
+  if (!site) return false;
+  const s = site.toLowerCase();
+  return PREMIUM_SOURCES.some((p) => s.includes(p));
+}
+
+/**
+ * Strip Yahoo-style exchange suffixes so the ticker is something FMP can
+ * actually look up (ASML.AS -> ASML, MC.PA -> MC, 005930.KS -> 005930).
+ * Cross-listed equities are usually findable under their US root, which
+ * is what FMP indexes.
+ */
+function normalizeTickerForFMP(symbol: string): string {
+  return symbol.toUpperCase().split('.')[0];
+}
+
 /* ─── read-state persistence (unchanged from the previous service) ──── */
 
 function getReadSet(): Set<string> {
@@ -66,9 +106,21 @@ async function fetchFromFMP(tickers?: string[]): Promise<NewsItem[]> {
   // a stale wire feed. When tickers are supplied we hit FMP's native
   // per-symbol filter (?tickers=AAPL,MSFT,…) so the response is already
   // restricted to the user's portfolio — no client-side filtering needed.
+  // FMP filters happen on the bare US root ticker. Normalising here means
+  // a portfolio holding "ASML.AS" still returns ASML headlines.
+  const normalised = (tickers ?? [])
+    .map(normalizeTickerForFMP)
+    .filter(Boolean);
+  // Dedupe in case the user holds two share classes of the same root
+  const unique = Array.from(new Set(normalised));
+
+  // FMP's news endpoint only accepts up to ~50 tickers per call; cap to
+  // 25 so the URL stays well under any proxy length limit.
+  const limited = unique.slice(0, 25);
+
   const params = new URLSearchParams({ limit: '25', apikey: FMP_KEY });
-  if (tickers && tickers.length > 0) {
-    params.set('tickers', tickers.map((t) => t.toUpperCase()).join(','));
+  if (limited.length > 0) {
+    params.set('tickers', limited.join(','));
   }
   params.set('_', String(Date.now()));
   const url = `https://financialmodelingprep.com/api/v3/stock_news?${params.toString()}`;
@@ -199,7 +251,20 @@ export async function fetchNews(tickers?: string[]): Promise<NewsItem[]> {
   // FMP first — clean JSON, fastest, supports per-symbol filtering
   try {
     const items = await fetchFromFMP(tickers);
-    if (items.length > 0) return sortByRecency(items);
+    if (items.length > 0) {
+      // Premium whitelist applies only to the General feed. On the
+      // Personal feed every headline that mentions the user's ticker
+      // is signal, regardless of publisher.
+      const filtered = personalised
+        ? items
+        : items.filter((it) => isPremiumSource(it.source));
+      // Safety net: if the whitelist would empty the feed entirely
+      // (FMP's free tier sometimes returns zero premium sources in a
+      // batch), fall back to the unfiltered set so users never see an
+      // empty General page.
+      const out = filtered.length >= 3 ? filtered : items;
+      return sortByRecency(out);
+    }
     console.warn(
       `[news] FMP returned an empty list${personalised ? ' for personalised feed' : ''}`,
     );
